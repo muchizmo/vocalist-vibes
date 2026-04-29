@@ -280,35 +280,57 @@
       // DOM Elements
       var $, elCard, elWord, elPron, elTrans, elCounter, elRevision, elBadge, elStatus, elPauseBtn, logContainer;
 
-      // ================= GLOBAL FUNCTIONS =================
-      // Defined here to be available to HTML immediately
+      // ================= GLOBAL FUNCTIONS (Defined early) =================
+      window.updatePauseBtn = function() { if (elPauseBtn) elPauseBtn.textContent = paused ? '▶' : '⏸'; };
+      window.closeModal = function() { if ($) $('edit-modal').classList.remove('active'); editingId = null; };
+      window.clearLog = function() { if (!logContainer) return; logEntries = []; logContainer.innerHTML = ''; console.log('🗑 Log cleared'); };
+
+      // View Manager (Fixes navigation bug)
+      function hideAllViews() {
+        if ($ && $('card-view') && $('list-view') && $('log-view')) {
+          $('card-view').style.display = 'none';
+          $('list-view').classList.remove('active');
+          $('log-view').classList.remove('active');
+        }
+      }
+      function showView(viewName) {
+        hideAllViews();
+        if (viewName === 'card') $('card-view').style.display = 'block';
+        else if (viewName === 'list') $('list-view').classList.add('active');
+        else if (viewName === 'log') $('log-view').classList.add('active');
+      }
+
       window.toggleList = function() { 
-        if (!$ || !logContainer) return;
-        var lv = $('list-view'), is = !lv.classList.contains('active'); 
-        lv.classList.toggle('active', is); 
-        $('card-view').style.display = is ? 'none' : 'block'; 
-        $('log-view').classList.remove('active'); 
-        if (is) { paused = true; window.clearTimer(); window.updatePauseBtn(); window.renderWordList(); } 
-        else window.startSession(); 
+        console.log('🔄 Toggle List View');
+        var isList = $('list-view').classList.contains('active');
+        if (isList) {
+          showView('card');
+          window.startSession();
+        } else {
+          showView('list');
+          paused = true; window.clearTimer(); window.updatePauseBtn();
+          window.renderWordList();
+        }
       };
 
       window.showLogView = function() { 
-        if (!$ || !logContainer) return;
-        var lv = $('log-view'), is = !lv.classList.contains('active'); 
-        lv.classList.toggle('active', is); 
-        $('card-view').style.display = 'none'; 
-        $('list-view').classList.remove('active'); 
-        if (is) { paused = true; window.clearTimer(); window.updatePauseBtn(); } 
-        else window.startSession(); 
+        console.log('🔄 Toggle Log View');
+        var isLog = $('log-view').classList.contains('active');
+        if (isLog) {
+          showView('card');
+          window.startSession();
+        } else {
+          showView('log');
+          paused = true; window.clearTimer(); window.updatePauseBtn();
+        }
       };
 
       window.toggleSettings = function() { if ($) $('settings-modal').classList.toggle('active'); };
-      window.closeModal = function() { if ($) $('edit-modal').classList.remove('active'); editingId = null; };
       window.setFilter = function(f) { if (f) { currentFilter = f; document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.filter === f); }); window.renderWordList(); } };
-      window.clearLog = function() { if (!logContainer) return; logEntries = []; logContainer.innerHTML = ''; console.log('Log cleared'); };
+      
       window.switchList = function(id) { 
         if (!appData || !appData.lists) return;
-        console.log('Switching list to:', id); 
+        console.log('🔀 Switching list to ID: ' + id); 
         if (appData.lists[id]) { 
           appData.currentListId = id; 
           window.saveData(); window.loadCurrentList(); window.syncBatchStatuses(); window.startSession(); 
@@ -318,6 +340,7 @@
 
       window.createNewList = function() { 
         var name = prompt('List name:', 'List ' + appData.nextListId); if (!name) return; 
+        console.log('➕ Creating new list: ' + name);
         var id = String(appData.nextListId++); 
         appData.lists[id] = { id, name, words: [], settings: { wordTime: 4, transTime: 4, batchSize: 100 }, batch: [], nextWordId: 1 }; 
         appData.currentListId = id; window.saveData(); window.renderListSelector(); window.loadCurrentList(); window.syncBatchStatuses(); window.startSession(); 
@@ -326,6 +349,7 @@
 
       window.deleteCurrentList = function() { 
         var list = appData.lists[appData.currentListId]; if (!confirm('Delete "' + list.name + '"?')) return; 
+        console.log('🗑 Deleting list: ' + list.name);
         delete appData.lists[appData.currentListId]; 
         var rem = Object.keys(appData.lists); appData.currentListId = rem.length ? rem[0] : null; 
         if (!appData.currentListId) window.createDefaultList(); 
@@ -334,7 +358,7 @@
       };
 
       window.applySettings = function() { 
-        console.log('Applying settings'); 
+        console.log('⚙️ Applying settings'); 
         settings.wordTime = window.clamp(1, 60, parseInt($('set-word-time').value) || 4); 
         settings.transTime = window.clamp(1, 60, parseInt($('set-trans-time').value) || 4); 
         settings.batchSize = window.clamp(1, 1000, parseInt($('set-batch-size').value) || 100); 
@@ -342,20 +366,19 @@
       };
 
       window.resetBatch = function() { 
+        console.log('🔄 Resetting batch...');
         words.forEach(function(w) { if (w.status === STATUS_NEW) w.status = STATUS_POSTPONED; }); 
         currentBatchIds = []; window.saveCurrentList(); window.syncBatchStatuses(); window.toggleSettings(); window.toast('🔄 Reset'); window.startSession(); 
       };
 
-      window.clearAll = function() { if (!confirm('Delete ALL?')) return; appData = { lists: {}, currentListId: null, nextListId: 1 }; window.saveData(); window.loadAll(); window.toast('🗑 Cleared'); };
+      window.clearAll = function() { if (!confirm('Delete ALL?')) return; console.log('⚠️ Clearing all data'); appData = { lists: {}, currentListId: null, nextListId: 1 }; window.saveData(); window.loadAll(); window.toast('🗑 Cleared'); };
       window.prevCard = function() { window.clearTimer(); queueIndex = Math.max(0, queueIndex - 1); window.showCurrentCard(); };
       window.nextCard = function() { window.clearTimer(); window.advance(); };
       
-      // Fix for updatePauseBtn scope
-      window.updatePauseBtn = function() { if (elPauseBtn) elPauseBtn.textContent = paused ? '▶' : '⏸'; };
-
       window.togglePause = function() { 
         paused = !paused; 
         window.updatePauseBtn(); 
+        console.log('⏸ Pause toggled: ' + (paused ? 'ON' : 'OFF'));
         if (!paused && phase !== 'idle') { 
           var r = phaseDuration - (Date.now() - phaseStart); 
           var n = phase === 'word' ? window.showTranslation : window.advance; 
@@ -366,6 +389,7 @@
       window.addWord = function() { 
         var w = $('input-word').value.trim(), p = $('input-pron').value.trim(), t = $('input-trans').value.trim(); 
         if (!w || !t) return window.toast('❌ Word & translation'); 
+        console.log('➕ Adding word: ' + w);
         var id = String(appData.lists[appData.currentListId].nextWordId++); 
         words.push({ id, word: w, pronunciation: p, translation: t, status: STATUS_POSTPONED, counter: 0, lastRevision: '' }); 
         window.saveCurrentList(); window.syncBatchStatuses(); window.startSession(); 
@@ -377,6 +401,7 @@
         if (!raw) return window.toast('❌ Paste word///translation'); 
         var parts = raw.split('///').map(function(s) { return s.trim(); }).filter(Boolean); 
         if (parts.length % 2 !== 0) return window.toast('❌ Odd count'); 
+        console.log('📥 Quick importing ' + (parts.length / 2) + ' pairs...');
         var added = 0, list = appData.lists[appData.currentListId]; 
         for (var i=0; i<parts.length; i+=2) { 
           if (parts[i] && parts[i+1] && !words.some(function(x) { return x.word.toLowerCase() === parts[i].toLowerCase(); })) { 
@@ -390,6 +415,7 @@
       
       window.importJSON = function(inp) { 
         var f = inp.files[0]; if (!f) return; 
+        console.log('📥 Importing JSON file: ' + f.name);
         var r = new FileReader(); 
         r.onload = function(e) { 
           try { 
@@ -410,9 +436,10 @@
               words.push({id:String(list.nextWordId++), word:w, pronunciation:p, translation:t, status:st, counter:counter, lastRevision:lastRev}); 
               c++; 
             }); 
+            console.log('✅ Parsed ' + c + ' valid words from JSON');
             if(c){ window.saveCurrentList(); window.syncBatchStatuses(); window.startSession(); if($('list-view').classList.contains('active')) window.renderWordList(); window.toast('✅ '+c); } 
             else window.toast('⚠️ None'); 
-          } catch(x) { window.toast('❌ Invalid JSON'); } 
+          } catch(x) { console.error('JSON parse error:', x); window.toast('❌ Invalid JSON'); } 
         }; 
         r.readAsText(f); inp.value=''; 
       };
@@ -420,6 +447,7 @@
       window.exportData = function() { 
         if (!storageAvailable) return window.toast('❌ Storage disabled'); 
         var list = appData.lists[appData.currentListId], a = document.createElement('a'); 
+        console.log('📤 Exporting ' + list.words.length + ' words...');
         a.href = URL.createObjectURL(new Blob([JSON.stringify(list.words, null, 2)], {type:'application/json'})); 
         a.download = list.name.replace(/\s+/g, '_') + '.json'; a.click(); window.toast('📤 Exported'); 
       };
@@ -450,6 +478,7 @@
       
       window.deleteWord = function(id) { 
         if (!confirm('Delete?')) return; 
+        console.log('🗑 Deleting word ID: ' + id);
         words = words.filter(function(w) { return w.id !== id; }); 
         currentBatchIds = currentBatchIds.filter(function(b) { return b !== id; }); 
         window.saveCurrentList(); window.syncBatchStatuses(); window.renderWordList(); window.startSession(); 
@@ -494,14 +523,17 @@
         var list = appData.lists[appData.currentListId]; if (!list) return; 
         words = list.words || []; settings = list.settings || { wordTime: 4, transTime: 4, batchSize: 100 }; currentBatchIds = list.batch || []; 
         $('set-word-time').value = settings.wordTime; $('set-trans-time').value = settings.transTime; $('set-batch-size').value = settings.batchSize; 
+        console.log('📋 Loading current list: ' + list.name + ' | Words: ' + words.length + ' | Batch size: ' + settings.batchSize);
         words.forEach(function(w) { w.id = String(w.id); if (w.status !== STATUS_REVISION) w.status = STATUS_POSTPONED; w.lastRevision = w.lastRevision || ''; }); 
       };
 
       window.saveCurrentList = function() { var list = appData.lists[appData.currentListId]; if (!list) return; list.words = words; list.settings = settings; list.batch = currentBatchIds; window.saveData(); };
       window.saveData = function() { 
         if (!storageAvailable) return;
-        try { localStorage.setItem(KEY_DATA, JSON.stringify(appData)); } 
-        catch(e) { console.error('Save failed:', e); window.toast('❗ Save failed'); }
+        try { 
+          localStorage.setItem(KEY_DATA, JSON.stringify(appData)); 
+          console.log('💾 Data saved to localStorage successfully');
+        } catch(e) { console.error('❌ Save failed:', e); window.toast('❗ Save failed'); }
       };
 
       window.syncBatchStatuses = function() { 
@@ -511,14 +543,14 @@
           if (batchSet.has(String(w.id))) { if (w.status !== STATUS_NEW) { w.status = STATUS_NEW; changed = true; } }
           else if (w.status === STATUS_NEW) { w.status = STATUS_POSTPONED; changed = true; }
         }); 
-        if (changed) window.saveCurrentList(); 
+        if (changed) { console.log('🔄 Status sync applied'); window.saveCurrentList(); }
       };
 
       window.startSession = function() { 
         if (sessionRecursionGuard) return;
         sessionRecursionGuard = true;
         try {
-          console.log('Starting session. Mode:', mode, 'Batch:', currentBatchIds.length, 'Size:', settings.batchSize);
+          console.log('🚀 Starting session | Mode: ' + mode + ' | Batch: ' + currentBatchIds.length + ' / ' + settings.batchSize);
           paused = false; phase = 'idle'; window.clearTimer(); queueIndex = 0; window.updatePauseBtn();
           if (mode === 'learning') { 
             window.syncBatchStatuses(); 
@@ -540,6 +572,7 @@
             if (revIds.length === 0) { window.showEmptyCard('Master words first'); return; } 
             queue = window.shuffleArray(revIds); 
           } 
+          console.log('✅ Queue built: ' + queue.length + ' cards');
           window.updateBadge(); window.showCurrentCard(); 
         } finally { sessionRecursionGuard = false; }
       };
@@ -584,18 +617,33 @@
 
       // ================= INIT =================
       window.loadAll = function() {
-        console.log('Loading app...');
+        console.log('🔄 Initializing app...');
+        console.log('📦 Storage available: ' + storageAvailable);
         try {
+          var raw = localStorage.getItem(KEY_DATA);
+          if (!raw) { console.log('⚠️ No data in localStorage. Creating default.'); }
+          else { console.log('💾 Found data in localStorage. Size: ' + (raw.length/1024).toFixed(2) + ' KB'); }
           var d = JSON.parse(localStorage.getItem(KEY_DATA));
           if (d) appData = d;
-          console.log('Loaded data for', Object.keys(appData.lists).length, 'list(s)');
-        } catch(e) { console.error('Load failed:', e); }
-        if (!appData.currentListId || !appData.lists[appData.currentListId]) window.createDefaultList();
+          
+          console.log('📂 Total lists found: ' + Object.keys(appData.lists || {}).length);
+          Object.keys(appData.lists || {}).forEach(function(id) {
+            var list = appData.lists[id];
+            console.log('  📝 List "' + list.name + '" (' + id + '): ' + (list.words ? list.words.length : 0) + ' words');
+          });
+        } catch(e) { console.error('❌ Load failed:', e); }
+        
+        if (!appData.currentListId || !appData.lists || !appData.lists[appData.currentListId]) {
+          console.log('🆕 No active list, creating default...');
+          window.createDefaultList();
+        } else {
+          console.log('✅ Active list: ' + appData.lists[appData.currentListId].name + ' (ID: ' + appData.currentListId + ')');
+        }
         window.loadCurrentList(); window.renderListSelector(); window.syncBatchStatuses(); window.startSession();
       };
 
       function initApp() {
-        try { localStorage.setItem('__test__', '1'); localStorage.removeItem('__test__'); } catch(e) { storageAvailable = false; console.warn('⚠️ localStorage disabled.'); }
+        try { localStorage.setItem('__test__', '1'); localStorage.removeItem('__test__'); } catch(e) { storageAvailable = false; console.warn('⚠️ localStorage disabled or blocked by browser.'); }
         
         $ = function(id) { return document.getElementById(id); };
         elCard = $('main-card'); elWord = $('c-word'); elPron = $('c-pron'); elTrans = $('c-trans');
@@ -623,6 +671,7 @@
         $('edit-modal').addEventListener('click', function(e) { if(e.target===$('edit-modal')) window.closeModal(); });
         $('settings-modal').addEventListener('click', function(e) { if(e.target===$('settings-modal')) window.toggleSettings(); });
         
+        console.log('✅ DOM ready. Starting load sequence...');
         window.loadAll();
       }
 
