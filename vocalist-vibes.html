@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Word Learning - Mobile</title>
+  <style>
+    :root {
+      --bg: #0b1220; --card: #151f32; --text: #e2e8f0; --muted: #94a3b8;
+      --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --purple: #a855f7;
+      --border: #1e293b; --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1rem; }
+    header { width: 100%; max-width: 560px; margin-bottom: 1rem; }
+    h1 { font-size: 1.2rem; color: var(--muted); margin-bottom: 0.5rem; text-align: center; }
+    
+    .list-selector { display: flex; gap: 0.3rem; align-items: center; justify-content: center; margin-bottom: 0.8rem; flex-wrap: wrap; }
+    .list-selector select { padding: 0.4rem; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.85rem; min-width: 120px; }
+    .list-selector .btn { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+    
+    .nav-row { display: flex; gap: 0.3rem; background: var(--card); padding: 3px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
+    .nav-btn { flex: 1; min-width: 60px; padding: 0.4rem; border: none; background: transparent; color: var(--muted); font-weight: 500; cursor: pointer; border-radius: 6px; transition: 0.2s; font-size: 0.85rem; }
+    .nav-btn.active { background: var(--primary); color: #fff; }
+    .nav-btn:hover { background: var(--border); }
+    .nav-btn.active:hover { background: var(--primary); }
+    .nav-btn.settings-btn { flex: 0; min-width: auto; }
+
+    .card-wrap { width: 100%; max-width: 500px; margin-bottom: 1rem; position: relative; }
+    .flashcard { 
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); 
+      padding: 2rem 1.5rem; text-align: center; cursor: pointer; user-select: text;
+      position: relative; overflow: hidden; touch-action: manipulation;
+    }
+    .flashcard:active { transform: scale(0.98); }
+    .flashcard .word { 
+      font-size: 2rem; font-weight: 400; margin-bottom: 0.2rem; min-height: 2.5rem; line-height: 1.2; user-select: text;
+      font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .flashcard .pron { font-size: 1rem; color: var(--primary); font-weight: 500; margin-bottom: 0.6rem; min-height: 1.3rem; font-family: ui-monospace, monospace; }
+    .flashcard .trans { font-size: 1.2rem; color: var(--muted); font-weight: 400; opacity: 0; transform: translateY(6px); transition: opacity 0.3s ease, transform 0.3s ease; min-height: 1.8rem; user-select: text; }
+    .flashcard .trans.visible { opacity: 1; transform: translateY(0); }
+    .flashcard .badge { position: absolute; top: 0.6rem; right: 0.6rem; font-size: 0.7rem; background: var(--bg); color: var(--muted); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); }
+    .flashcard .hint { font-size: 0.75rem; color: var(--muted); opacity: 0.7; margin-top: 0.6rem; }
+    .flashcard .meta-row { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; }
+
+    .controls { display: flex; gap: 0.3rem; justify-content: center; margin-bottom: 0.8rem; }
+    .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: 0.15s; background: var(--primary); color: #fff; user-select: none; font-size: 0.85rem; }
+    .btn:active { opacity: 0.9; }
+    .btn.secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
+    .btn.danger { background: var(--danger); }
+    .btn.success { background: var(--success); }
+    
+    .status-msg { text-align: center; min-height: 1.2rem; color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
+
+    .filter-row { display: flex; gap: 0.3rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .filter-btn { padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--card); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; }
+    .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    
+    .list-view { width: 100%; max-width: 560px; display: none; }
+    .list-view.active { display: block; }
+    .word-list { display: grid; gap: 0.4rem; max-height: 50vh; overflow-y: auto; padding-right: 0.3rem; }
+    .word-item { display: flex; align-items: flex-start; gap: 0.6rem; background: var(--card); padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); }
+    .word-item .info { flex: 1; min-width: 0; }
+    .word-item .w { font-weight: 500; font-size: 0.95rem; word-break: break-word; }
+    .word-item .p { font-size: 0.8rem; color: var(--primary); font-family: ui-monospace, monospace; margin: 0.05rem 0; }
+    .word-item .t { color: var(--muted); font-size: 0.8rem; margin-top: 0.05rem; white-space: normal; word-break: break-word; line-height: 1.2; }
+    .word-item .meta { font-size: 0.7rem; color: var(--muted); margin-top: 0.15rem; }
+    .word-item .status-tag { font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 3px; font-weight: 600; }
+    .status-tag.new { background: rgba(59,130,246,0.2); color: var(--primary); }
+    .status-tag.postponed { background: rgba(168,85,247,0.2); color: var(--purple); }
+    .status-tag.revision { background: rgba(16,185,129,0.2); color: var(--success); }
+    .word-item .actions { display: flex; gap: 0.3rem; flex-shrink: 0; align-self: center; }
+    .word-item .actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem; width: 100%; max-width: 400px; max-height: 85vh; overflow-y: auto; }
+    .modal h3 { margin-bottom: 0.8rem; font-size: 1.1rem; }
+    .modal input, .modal select, .modal textarea { width: 100%; padding: 0.5rem; margin-bottom: 0.6rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
+    .modal textarea { min-height: 70px; resize: vertical; font-family: monospace; }
+    .modal label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .modal-actions { display: flex; gap: 0.4rem; justify-content: flex-end; margin-top: 0.4rem; }
+
+    .settings-content { display: grid; gap: 0.8rem; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+    .row input { width: 50px; padding: 0.3rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); text-align: center; font-size: 0.9rem; }
+    .data-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
+    .data-actions .btn { flex: 1; min-width: 90px; justify-content: center; font-size: 0.8rem; }
+    
+    .quick-import textarea { width: 100%; min-height: 70px; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.85rem; margin-bottom: 0.4rem; }
+    .quick-import small { display: block; color: var(--muted); margin-bottom: 0.4rem; font-size: 0.8rem; }
+    .quick-import .warn { color: var(--warning); font-size: 0.75rem; display: block; margin-top: 0.2rem; }
+
+    .add-section { width: 100%; max-width: 500px; padding: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 0.8rem; }
+    .add-section h3 { margin-bottom: 0.6rem; font-size: 0.95rem; color: var(--muted); }
+    .input-group { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .input-group input { flex: 1; min-width: 100px; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
+
+    /* Mobile-specific fixes */
+    @media (max-width: 480px) { 
+      .flashcard .word { font-size: 1.7rem; } 
+      .flashcard { padding: 1.8rem 1.2rem; }
+      .input-group { flex-direction: column; }
+      .input-group input { width: 100%; }
+      .nav-btn { min-width: 55px; padding: 0.35rem; font-size: 0.8rem; }
+    }
+    
+    /* Storage warning banner */
+    #storage-warning {
+      background: var(--danger); color: white; padding: 0.5rem; text-align: center; 
+      font-size: 0.8rem; display: none; border-radius: 6px; margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="storage-warning" hidden>⚠️ Storage may be limited. Try opening via http:// instead of file://</div>
+  
+  <header>
+    <h1>📖 Word Learning</h1>
+    <div class="list-selector">
+      <select id="list-select" onchange="window.switchList(this.value)"></select>
+      <button class="btn secondary" onclick="window.createNewList()">+ New</button>
+      <button class="btn danger" onclick="window.deleteCurrentList()">🗑</button>
+    </div>
+    <div class="nav-row">
+      <button class="nav-btn active" data-mode="learning">📖 Learn</button>
+      <button class="nav-btn" data-mode="repeating">🔄 Repeat</button>
+      <button class="nav-btn list-btn" onclick="window.toggleList()">📋 List</button>
+      <button class="nav-btn settings-btn" onclick="window.toggleSettings()">⚙️</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="card-view">
+      <div class="card-wrap">
+        <div class="flashcard" id="main-card">
+          <div class="badge" id="q-badge">0/0</div>
+          <div class="word" id="c-word">---</div>
+          <div class="pron" id="c-pron"></div>
+          <div class="trans" id="c-trans">---</div>
+          <div class="meta-row">
+            <span id="c-counter">Seen: 0×</span>
+            <span id="c-revision">Last: Never</span>
+          </div>
+          <div class="hint">Tap to move · Select text freely</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="btn secondary" onclick="window.prevCard()">⏮</button>
+        <button class="btn secondary" id="pause-btn" onclick="window.togglePause()">⏸</button>
+        <button class="btn secondary" onclick="window.nextCard()">⏭</button>
+      </div>
+      <div class="status-msg" id="status">Add words to begin</div>
+    </section>
+
+    <section id="list-view" class="list-view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+        <h3 style="color:var(--muted); font-size:1rem;">📚 Library</h3>
+        <button class="btn secondary" onclick="window.toggleList()" style="padding:0.3rem 0.6rem; font-size:0.8rem;">Back</button>
+      </div>
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all" onclick="window.setFilter('all')">All</button>
+        <button class="filter-btn" data-filter="new" onclick="window.setFilter('new')">📖 New</button>
+        <button class="filter-btn" data-filter="postponed" onclick="window.setFilter('postponed')">📥 Postponed</button>
+        <button class="filter-btn" data-filter="revision" onclick="window.setFilter('revision')">🔄 Revision</button>
+      </div>
+      <div class="word-list" id="word-list"></div>
+      <div id="empty-list" style="text-align:center; padding:1.5rem; color:var(--muted); display:none; font-size:0.9rem;">No words yet.</div>
+    </section>
+
+    <section class="add-section">
+      <h3>➕ Add Word</h3>
+      <div class="input-group">
+        <input type="text" id="input-word" placeholder="Word">
+        <input type="text" id="input-pron" placeholder="Pronunciation">
+        <input type="text" id="input-trans" placeholder="Translation">
+      </div>
+      <button class="btn success" onclick="window.addWord()" style="width:100%">Add</button>
+    </section>
+  </main>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal">
+      <h3>⚙️ Settings</h3>
+      <div class="settings-content">
+        <div class="row">
+          <label>Word time</label>
+          <input type="number" id="set-word-time" min="1" max="60" value="4"> <span>sec</span>
+        </div>
+        <div class="row">
+          <label>Trans time</label>
+          <input type="number" id="set-trans-time" min="1" max="60" value="4"> <span>sec</span>
+        </div>
+        <div class="row">
+          <label>Batch size</label>
+          <input type="number" id="set-batch-size" min="1" max="1000" value="100"> <span>words</span>
+        </div>
+        <button class="btn secondary" onclick="window.resetBatch()" style="margin-top:0.3rem; width:100%; font-size:0.85rem;">🔄 Reset Batch</button>
+        <div class="quick-import">
+          <strong>📥 Quick Import</strong>
+          <small>Paste: word///translation</small>
+          <span class="warn">⚠️ No JSON here.</span>
+          <textarea id="quick-import-area" placeholder="apple///яблоко"></textarea>
+          <div style="display:flex; gap:0.3rem;">
+            <button class="btn success" onclick="window.quickImport()">Import</button>
+            <button class="btn secondary" onclick="document.getElementById('quick-import-area').value=''">Clear</button>
+          </div>
+        </div>
+        <hr style="border:none; border-top:1px solid var(--border); margin:0.2rem 0;">
+        <div class="data-actions">
+          <button class="btn secondary" onclick="window.exportData()">📤 Export</button>
+          <input type="file" id="import-file" accept=".json" style="display:none" onchange="window.importJSON(this)">
+          <button class="btn secondary" onclick="document.getElementById('import-file').click()">📥 Import</button>
+          <button class="btn danger" onclick="window.clearAll()">🗑 Clear</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="window.applySettings()">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT MODAL -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <h3>✏️ Edit</h3>
+      <label>Word</label>
+      <input type="text" id="edit-word">
+      <label>Pronunciation</label>
+      <input type="text" id="edit-pron">
+      <label>Translation</label>
+      <input type="text" id="edit-trans">
+      <label>Status</label>
+      <select id="edit-status">
+        <option value="new">📖 New</option>
+        <option value="postponed">📥 Postponed</option>
+        <option value="revision">🔄 Revision</option>
+      </select>
+      <label>Counter</label>
+      <input type="number" id="edit-counter" readonly style="background:var(--bg); opacity:0.7;">
+      <label>Last seen</label>
+      <input type="text" id="edit-revision" readonly style="background:var(--bg); opacity:0.7;">
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="window.closeModal()">Cancel</button>
+        <button class="btn" onclick="window.saveEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var STATUS_NEW = 'new', STATUS_POSTPONED = 'postponed', STATUS_REVISION = 'revision';
+      var KEY_DATA = 'wApp_mobile_v1';
+      var appData = { lists: {}, currentListId: null, nextListId: 1 };
+      var words = [], settings = { wordTime: 4, transTime: 4, batchSize: 100 }, mode = 'learning', currentFilter = 'all';
+      var currentBatchIds = [], queue = [], queueIndex = 0;
+      var paused = false, phase = 'idle', phaseStart = 0, phaseDuration = 0, timerId = null, editingId = null;
+      var sessionRecursionGuard = false;
+      var storageAvailable = true;
+
+      // Check localStorage availability
+      try {
+        localStorage.setItem('__test__', '1');
+        localStorage.removeItem('__test__');
+      } catch(e) {
+        storageAvailable = false;
+        document.getElementById('storage-warning').hidden = false;
+        console.warn('localStorage not available:', e);
+      }
+
+      var $ = function(id) { return document.getElementById(id); };
+      var elCard = $('main-card'), elWord = $('c-word'), elPron = $('c-pron'), elTrans = $('c-trans');
+      var elCounter = $('c-counter'), elRevision = $('c-revision'), elBadge = $('q-badge'), elStatus = $('status'), elPauseBtn = $('pause-btn');
+
+      // ================= STORAGE & INIT =================
+      function loadAll() {
+        if (!storageAvailable) {
+          toast('⚠️ Storage disabled. Data won\'t persist.');
+          createDefaultList();
+          loadCurrentList();
+          renderListSelector();
+          startSession();
+          return;
+        }
+        try {
+          var d = JSON.parse(localStorage.getItem(KEY_DATA));
+          if (d) appData = d;
+        } catch(e) {
+          console.warn('Load failed, using defaults:', e);
+        }
+        if (!appData.currentListId || !appData.lists[appData.currentListId]) createDefaultList();
+        loadCurrentList(); renderListSelector(); syncBatchStatuses(); startSession();
+      }
+      function createDefaultList() { var id = String(appData.nextListId++); appData.lists[id] = { id, name: 'My Words', words: [], settings: { wordTime: 4, transTime: 4, batchSize: 100 }, batch: [], nextWordId: 1 }; appData.currentListId = id; saveData(); }
+      function loadCurrentList() { 
+        var list = appData.lists[appData.currentListId]; if (!list) return; 
+        words = list.words || []; settings = list.settings || { wordTime: 4, transTime: 4, batchSize: 100 }; currentBatchIds = list.batch || []; 
+        $('set-word-time').value = settings.wordTime; $('set-trans-time').value = settings.transTime; $('set-batch-size').value = settings.batchSize; 
+        words.forEach(function(w) { 
+          w.id = String(w.id); 
+          if (w.status === STATUS_REVISION) return;
+          w.status = STATUS_POSTPONED; 
+          w.lastRevision = w.lastRevision || ''; 
+        }); 
+      }
+      function saveCurrentList() { var list = appData.lists[appData.currentListId]; if (!list) return; list.words = words; list.settings = settings; list.batch = currentBatchIds; saveData(); }
+      function saveData() { 
+        if (!storageAvailable) return;
+        try { 
+          var cleanData = JSON.parse(JSON.stringify(appData, function(key, value) {
+            if (key === 'nextListId' || key === 'currentListId') return value;
+            if (typeof value === 'object' && value !== null) {
+              var copy = {};
+              for (var k in value) {
+                if (k !== 'words' && k !== 'settings' && k !== 'batch') copy[k] = value[k];
+              }
+              return copy;
+            }
+            return value;
+          }));
+          localStorage.setItem(KEY_DATA, JSON.stringify(cleanData));
+        } catch(e) { 
+          console.error('Save failed:', e);
+          toast('❗ Save failed - data may not persist');
+        }
+      }
+
+      // ================= STRICT STATUS SYNC =================
+      function syncBatchStatuses() { 
+        var batchSet = new Set(currentBatchIds.map(String)); 
+        var changed = false; 
+        words.forEach(function(w) { 
+          var idStr = String(w.id);
+          if (batchSet.has(idStr)) {
+            if (w.status !== STATUS_NEW) { w.status = STATUS_NEW; changed = true; }
+          } else {
+            if (w.status === STATUS_NEW) { w.status = STATUS_POSTPONED; changed = true; }
+          }
+        }); 
+        if (changed) saveCurrentList(); 
+      }
+
+      // ================= SESSION LOGIC =================
+      function startSession() { 
+        if (sessionRecursionGuard) return;
+        sessionRecursionGuard = true;
+        try {
+          paused = false; phase = 'idle'; clearTimer(); queueIndex = 0; updatePauseBtn();
+          if (mode === 'learning') { 
+            syncBatchStatuses(); 
+            var allNew = words.filter(function(w) { return w.status === STATUS_NEW; }); 
+            currentBatchIds = currentBatchIds.filter(function(id) { 
+              return allNew.some(function(w) { return w.id === id; }); 
+            }); 
+            if (currentBatchIds.length > settings.batchSize) {
+              currentBatchIds = currentBatchIds.slice(0, settings.batchSize);
+              saveCurrentList();
+              syncBatchStatuses();
+            } else if (currentBatchIds.length < settings.batchSize) {
+              var candidates = words.filter(function(w) { 
+                return w.status === STATUS_POSTPONED && currentBatchIds.indexOf(w.id) === -1; 
+              }); 
+              var shuffled = shuffleArray(candidates); 
+              var needed = settings.batchSize - currentBatchIds.length;
+              if (needed > 0 && shuffled.length > 0) {
+                currentBatchIds.push.apply(currentBatchIds, shuffled.slice(0, needed).map(function(w) { return w.id; }));
+                saveCurrentList(); 
+                syncBatchStatuses();
+              }
+            }
+            if (currentBatchIds.length === 0) { 
+              if (words.length > 0) { showEmptyCard('Add more words or increase batch size'); return; } 
+              showEmptyCard('No words in this list'); return; 
+            } 
+            queue = shuffleArray(currentBatchIds); 
+          } else { 
+            var revIds = words.filter(function(w) { return w.status === STATUS_REVISION; }).map(function(w) { return w.id; }); 
+            if (revIds.length === 0) { showEmptyCard('Master words first'); return; } 
+            queue = shuffleArray(revIds); 
+          } 
+          updateBadge(); showCurrentCard(); 
+        } finally {
+          sessionRecursionGuard = false;
+        }
+      }
+      function showCurrentCard() { 
+        while (queueIndex < queue.length) { 
+          var id = queue[queueIndex]; 
+          var item = words.find(function(w) { return w.id === String(id); }); 
+          if (item) { displayWord(item); return; } 
+          queue.splice(queueIndex, 1); 
+        } 
+        if (queue.length === 0) startSession(); 
+      }
+      function displayWord(item) { phase = 'word'; item.lastRevision = new Date().toISOString(); elWord.textContent = item.word; elPron.textContent = item.pronunciation || ''; elTrans.textContent = item.translation; elTrans.classList.remove('visible'); elCounter.textContent = 'Seen: ' + (item.counter || 0) + '×'; elRevision.textContent = 'Last: ' + (item.lastRevision ? new Date(item.lastRevision).toLocaleString() : 'Never'); item.counter = (item.counter || 0) + 1; saveCurrentList(); updateBadge(); startPhase(settings.wordTime * 1000, showTranslation); }
+      function showTranslation() { phase = 'trans'; elTrans.classList.add('visible'); startPhase(settings.transTime * 1000, advance); }
+      function advance() { queueIndex++; if (queueIndex >= queue.length) startSession(); else showCurrentCard(); }
+      function startPhase(ms, cb) { phaseStart = Date.now(); phaseDuration = ms; timerId = setTimeout(function() { if (!paused) cb(); }, ms); }
+      function clearTimer() { clearTimeout(timerId); timerId = null; }
+      function updateBadge() { elBadge.textContent = mode === 'learning' ? queue.length + '/' + currentBatchIds.length : queue.length; }
+      function showEmptyCard(msg) { elWord.textContent = '📭'; elPron.textContent = ''; elTrans.textContent = msg; elTrans.classList.remove('visible'); elCounter.textContent = ''; elRevision.textContent = 'Last: Never'; elBadge.textContent = '0'; elStatus.textContent = ''; }
+
+      // ================= CONTROLS =================
+      window.prevCard = function() { clearTimer(); queueIndex = Math.max(0, queueIndex - 1); showCurrentCard(); };
+      window.nextCard = function() { clearTimer(); advance(); };
+      window.togglePause = function() { paused = !paused; updatePauseBtn(); if (!paused && phase !== 'idle') { var r = phaseDuration - (Date.now() - phaseStart); var n = phase === 'word' ? showTranslation : advance; if (r <= 10) n(); else startPhase(r, n); } else { clearTimer(); } };
+      function updatePauseBtn() { elPauseBtn.textContent = paused ? '▶' : '⏸'; }
+
+      // ================= TOUCH-FRIENDLY CLICK =================
+      elCard.addEventListener('touchstart', function(e) { e.stopPropagation(); }, {passive: true});
+      elCard.addEventListener('click', function(e) { 
+        if (queue.length === 0) return; 
+        var sel = window.getSelection(); 
+        if (sel && sel.type === 'Range' && sel.toString().trim().length > 0) return; 
+        var item = words.find(function(w) { return w.id === queue[queueIndex]; }); 
+        if (!item) return; 
+        if (mode === 'learning') { 
+          item.status = STATUS_REVISION; 
+          currentBatchIds = currentBatchIds.filter(function(id) { return id !== item.id; }); 
+          saveCurrentList(); syncBatchStatuses(); toast('✅ Learned'); 
+        } else { 
+          item.status = STATUS_POSTPONED; 
+          saveCurrentList(); syncBatchStatuses(); toast('🔄 Postponed'); 
+        } 
+        clearTimer(); advance(); 
+      });
+
+      // ================= MODE & NAV =================
+      document.querySelectorAll('[data-mode]').forEach(function(btn) { btn.addEventListener('click', function() { if (btn.dataset.mode === mode) return; mode = btn.dataset.mode; document.querySelectorAll('[data-mode]').forEach(function(b) { b.classList.toggle('active', b.dataset.mode === mode); }); startSession(); }); });
+
+      window.switchList = function(id) { if (appData.lists[id]) { appData.currentListId = id; saveData(); loadCurrentList(); syncBatchStatuses(); startSession(); if ($('list-view').classList.contains('active')) window.renderWordList(); } };
+      window.createNewList = function() { var name = prompt('List name:', 'List ' + appData.nextListId); if (!name) return; var id = String(appData.nextListId++); appData.lists[id] = { id, name, words: [], settings: { wordTime: 4, transTime: 4, batchSize: 100 }, batch: [], nextWordId: 1 }; appData.currentListId = id; saveData(); renderListSelector(); loadCurrentList(); syncBatchStatuses(); startSession(); toast('✅ Created'); };
+      window.deleteCurrentList = function() { var list = appData.lists[appData.currentListId]; if (!confirm('Delete "' + list.name + '"?')) return; delete appData.lists[appData.currentListId]; var rem = Object.keys(appData.lists); appData.currentListId = rem.length ? rem[0] : null; if (!appData.currentListId) createDefaultList(); saveData(); renderListSelector(); loadCurrentList(); syncBatchStatuses(); startSession(); toast('🗑 Deleted'); };
+      function renderListSelector() { var sel = $('list-select'); sel.innerHTML = ''; Object.keys(appData.lists).forEach(function(id) { var list = appData.lists[id]; var opt = document.createElement('option'); opt.value = list.id; opt.textContent = list.name; if (list.id === appData.currentListId) opt.selected = true; sel.appendChild(opt); }); }
+
+      window.toggleList = function() { var lv = $('list-view'), is = !lv.classList.contains('active'); lv.classList.toggle('active', is); $('card-view').style.display = is ? 'none' : 'block'; if (is) { paused = true; clearTimer(); updatePauseBtn(); window.renderWordList(); } else startSession(); };
+      window.setFilter = function(f) { currentFilter = f; document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.filter === f); }); window.renderWordList(); };
+      window.toggleSettings = function() { $('settings-modal').classList.toggle('active'); };
+      window.applySettings = function() { 
+        settings.wordTime = clamp(1, 60, parseInt($('set-word-time').value) || 4); 
+        settings.transTime = clamp(1, 60, parseInt($('set-trans-time').value) || 4); 
+        settings.batchSize = clamp(1, 1000, parseInt($('set-batch-size').value) || 100); 
+        saveCurrentList(); syncBatchStatuses(); 
+        window.toggleSettings(); toast('✅ Applied'); startSession(); 
+      };
+      window.resetBatch = function() { words.forEach(function(w) { if (w.status === STATUS_NEW) w.status = STATUS_POSTPONED; }); currentBatchIds = []; saveCurrentList(); syncBatchStatuses(); window.toggleSettings(); toast('🔄 Reset'); startSession(); };
+      window.clearAll = function() { if (!confirm('Delete ALL?')) return; appData = { lists: {}, currentListId: null, nextListId: 1 }; saveData(); loadAll(); toast('🗑 Cleared'); };
+
+      window.renderWordList = function() { 
+        syncBatchStatuses(); 
+        var c = $('word-list'); c.innerHTML = ''; 
+        var f = currentFilter === 'all' ? words : words.filter(function(w) { return w.status === currentFilter; }); 
+        if (!f.length) { $('empty-list').style.display = 'block'; return; } 
+        $('empty-list').style.display = 'none'; 
+        f.forEach(function(w) { var el = document.createElement('div'); el.className = 'word-item'; var ph = w.pronunciation ? '<div class="p">' + escHtml(w.pronunciation) + '</div>' : ''; var dt = w.lastRevision ? new Date(w.lastRevision).toLocaleDateString() : '-'; el.innerHTML = '<div class="info"><div class="w">' + escHtml(w.word) + '</div>' + ph + '<div class="t">' + escHtml(w.translation) + '</div><div class="meta">👁 ' + (w.counter || 0) + '</div></div><span class="status-tag ' + w.status + '">' + w.status + '</span><div class="actions"><button class="btn secondary" onclick="window.openEdit(\'' + w.id + '\')">✏️</button><button class="btn danger" onclick="window.deleteWord(\'' + w.id + '\')">🗑</button></div>'; c.appendChild(el); }); 
+      };
+
+      window.openEdit = function(id) { editingId = id; var w = words.find(function(x) { return x.id === id; }); if (!w) return; $('edit-word').value = w.word || ''; $('edit-pron').value = w.pronunciation || ''; $('edit-trans').value = w.translation || ''; $('edit-status').value = w.status || STATUS_POSTPONED; $('edit-counter').value = w.counter || 0; $('edit-revision').value = w.lastRevision ? new Date(w.lastRevision).toLocaleString() : 'Never'; $('edit-modal').classList.add('active'); };
+      window.closeModal = function() { $('edit-modal').classList.remove('active'); editingId = null; };
+      window.saveEdit = function() { var w = words.find(function(x) { return x.id === editingId; }); if (!w) return window.closeModal(); w.word = $('edit-word').value.trim() || w.word; w.pronunciation = $('edit-pron').value.trim(); w.translation = $('edit-trans').value.trim() || w.translation; var ns = $('edit-status').value; if (ns !== w.status) { w.status = ns; } saveCurrentList(); syncBatchStatuses(); window.closeModal(); window.renderWordList(); startSession(); toast('✅ Saved'); };
+      window.deleteWord = function(id) { if (!confirm('Delete?')) return; words = words.filter(function(w) { return w.id !== id; }); currentBatchIds = currentBatchIds.filter(function(b) { return b !== id; }); saveCurrentList(); syncBatchStatuses(); window.renderWordList(); startSession(); toast('🗑 Deleted'); };
+
+      window.addWord = function() { var w = $('input-word').value.trim(), p = $('input-pron').value.trim(), t = $('input-trans').value.trim(); if (!w || !t) return toast('❌ Word & translation'); var id = String(appData.lists[appData.currentListId].nextWordId++); words.push({ id, word: w, pronunciation: p, translation: t, status: STATUS_POSTPONED, counter: 0, lastRevision: '' }); saveCurrentList(); syncBatchStatuses(); startSession(); toast('✅ Added'); };
+      
+      window.quickImport = function() { var raw = $('quick-import-area').value.trim(); if (!raw) return toast('❌ Paste word///translation'); var parts = raw.split('///').map(function(s) { return s.trim(); }).filter(Boolean); if (parts.length % 2 !== 0) return toast('❌ Odd count'); var added = 0, list = appData.lists[appData.currentListId]; for (var i=0; i<parts.length; i+=2) { if (parts[i] && parts[i+1] && !words.some(function(x) { return x.word.toLowerCase() === parts[i].toLowerCase(); })) { words.push({ id: String(list.nextWordId++), word: parts[i], pronunciation: '', translation: parts[i+1], status: STATUS_POSTPONED, counter: 0, lastRevision: '' }); added++; } } if (added) { saveCurrentList(); syncBatchStatuses(); startSession(); toast('✅ Imported ' + added); } else toast('⚠️ None'); };
+      
+      window.importJSON = function(inp) { 
+        var f = inp.files[0]; if (!f) return; 
+        var r = new FileReader(); 
+        r.onload = function(e) { 
+          try { 
+            var d = JSON.parse(e.target.result); 
+            if (!Array.isArray(d) && d.words) d = d.words; 
+            if (!Array.isArray(d)) throw 1; 
+            var c=0, list = appData.lists[appData.currentListId]; 
+            var isNative = d.length > 0 && typeof d[0].word === 'string';
+            d.forEach(function(it) { 
+              var w, t, p, st, counter, lastRev;
+              if (isNative) {
+                w = String(it.word || '').trim(); t = String(it.translation || '').trim(); p = it.pronunciation || ''; 
+                st = (it.status === STATUS_REVISION) ? STATUS_REVISION : STATUS_POSTPONED; 
+                counter = it.counter || 0; lastRev = it.lastRevision || '';
+              } else {
+                if (!it.word || !Array.isArray(it.word)) return;
+                w = String(it.word[0]||'').trim(); t = String(it.word[1]||'').trim(); p = String(it.word[2]||'').trim();
+                st = (String(it.direction).trim()==='1') ? STATUS_REVISION : STATUS_POSTPONED;
+                counter = parseInt(it.counter)||0; lastRev = it.lastRevision||'';
+              }
+              if (!w || !t || words.some(function(x){return x.word.toLowerCase()===w.toLowerCase();})) return; 
+              words.push({id:String(list.nextWordId++), word:w, pronunciation:p, translation:t, status:st, counter:counter, lastRevision:lastRev}); 
+              c++; 
+            }); 
+            if(c){ saveCurrentList(); syncBatchStatuses(); startSession(); if($('list-view').classList.contains('active')) window.renderWordList(); toast('✅ '+c); } 
+            else toast('⚠️ None'); 
+          } catch(x) { toast('❌ Invalid JSON'); } 
+        }; 
+        r.readAsText(f); inp.value=''; 
+      };
+      window.exportData = function() { 
+        if (!storageAvailable) return toast('❌ Storage disabled');
+        var list = appData.lists[appData.currentListId], a = document.createElement('a'); 
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(list.words, null, 2)], {type:'application/json'})); 
+        a.download = list.name.replace(/\s+/g, '_') + '.json'; a.click(); toast('📤 Exported'); 
+      };
+
+      function clamp(a,b,v){return Math.min(b,Math.max(a,v||a))}
+      function escHtml(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+      function shuffleArray(arr){var a=[...arr];for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a}
+      function toast(m){elStatus.textContent=m;setTimeout(function(){if(elStatus.textContent===m)elStatus.textContent=''},2000)}
+
+      $('edit-modal').addEventListener('click', function(e) { if(e.target===$('edit-modal')) window.closeModal(); });
+      $('settings-modal').addEventListener('click', function(e) { if(e.target===$('settings-modal')) window.toggleSettings(); });
+      
+      loadAll();
+    })();
+  </script>
+</body>
+</html>
