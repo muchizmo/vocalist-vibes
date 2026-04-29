@@ -3,17 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Word Learning - Mobile</title>
+  <title>Word Learning - SRS</title>
   <style>
     :root {
       --bg: #0b1220; --card: #151f32; --text: #e2e8f0; --muted: #94a3b8;
-      --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --purple: #a855f7;
+      --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --purple: #a855f7; --pink: #db2777;
       --border: #1e293b; --radius: 14px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1rem; }
-    header { width: 100%; max-width: 560px; margin-bottom: 1rem; }
-    h1 { font-size: 1.2rem; color: var(--muted); margin-bottom: 0.5rem; text-align: center; }
+    
+    header { width: 100%; max-width: 420px; margin-bottom: 1rem; text-align: center; }
+    h1 { font-size: 1.2rem; color: var(--muted); margin-bottom: 0.3rem; }
+    .version { font-size: 0.7rem; color: var(--muted); opacity: 0.7; margin-bottom: 0.5rem; display: inline-block; background: var(--card); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); }
     
     .list-selector { display: flex; gap: 0.3rem; align-items: center; justify-content: center; margin-bottom: 0.8rem; flex-wrap: wrap; }
     .list-selector select { padding: 0.4rem; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.85rem; min-width: 120px; }
@@ -26,27 +28,38 @@
     .nav-btn.active:hover { background: var(--primary); }
     .nav-btn.log-btn { color: var(--warning); }
     .nav-btn.log-btn.active { background: var(--warning); color: #000; }
+    .nav-btn.repeat-active { background: var(--pink) !important; color: #fff !important; box-shadow: 0 0 8px rgba(219, 39, 119, 0.5); }
 
-    .card-wrap { width: 100%; max-width: 500px; margin-bottom: 1rem; position: relative; }
+    #card-view { width: 100%; max-width: 420px; margin: 0 auto; display: block; }
+    .card-section { width: 100%; display: flex; flex-direction: column; align-items: center; margin: 0 auto 1.5rem; }
+    .card-wrap { width: 100%; margin-bottom: 1rem; }
+    
     .flashcard { 
-      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); 
-      padding: 2rem 1.5rem; text-align: center; cursor: pointer; user-select: text;
+      width: 100%; min-height: 280px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); 
+      padding: 1.5rem; text-align: center; cursor: pointer; user-select: text;
       position: relative; overflow: hidden; touch-action: manipulation;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
     }
     .flashcard:active { transform: scale(0.98); }
     .flashcard .word { 
-      font-size: 2rem; font-weight: 400; margin-bottom: 0.2rem; min-height: 2.5rem; line-height: 1.2; user-select: text;
+      font-size: 2rem; font-weight: 400; margin-bottom: 0.3rem; min-height: 3rem; line-height: 1.2; user-select: text;
       font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
-      -webkit-font-smoothing: antialiased;
+      -webkit-font-smoothing: antialiased; word-break: break-word; overflow-wrap: break-word;
     }
-    .flashcard .pron { font-size: 1rem; color: var(--primary); font-weight: 500; margin-bottom: 0.6rem; min-height: 1.3rem; font-family: ui-monospace, monospace; }
-    .flashcard .trans { font-size: 1.2rem; color: var(--muted); font-weight: 400; opacity: 0; transform: translateY(6px); transition: opacity 0.3s ease, transform 0.3s ease; min-height: 1.8rem; user-select: text; }
+    .flashcard .pron { 
+      font-size: 1rem; color: var(--primary); font-weight: 500; margin-bottom: 0.5rem; min-height: 1.5rem; 
+      font-family: ui-monospace, monospace; word-break: break-word; overflow-wrap: break-word;
+    }
+    .flashcard .trans { 
+      font-size: 1.2rem; color: var(--muted); font-weight: 400; opacity: 0; transform: translateY(6px); transition: opacity 0.3s ease, transform 0.3s ease; 
+      min-height: 2.5rem; user-select: text; word-break: break-word; overflow-wrap: break-word;
+    }
     .flashcard .trans.visible { opacity: 1; transform: translateY(0); }
     .flashcard .badge { position: absolute; top: 0.6rem; right: 0.6rem; font-size: 0.7rem; background: var(--bg); color: var(--muted); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); }
-    .flashcard .hint { font-size: 0.75rem; color: var(--muted); opacity: 0.7; margin-top: 0.6rem; }
-    .flashcard .meta-row { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; }
+    .flashcard .hint { font-size: 0.75rem; color: var(--muted); opacity: 0.7; margin-top: 0.5rem; }
+    .flashcard .meta-row { font-size: 0.7rem; color: var(--muted); margin-top: 0.5rem; display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; }
 
-    .controls { display: flex; gap: 0.3rem; justify-content: center; margin-bottom: 0.8rem; }
+    .controls { width: 100%; display: flex; gap: 0.3rem; justify-content: center; margin-bottom: 0.8rem; }
     .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: 0.15s; background: var(--primary); color: #fff; user-select: none; font-size: 0.85rem; }
     .btn:active { opacity: 0.9; }
     .btn.secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
@@ -61,6 +74,14 @@
     
     .list-view { width: 100%; max-width: 560px; display: none; }
     .list-view.active { display: block; }
+    
+    .view-header { display: flex; justify-content: center; margin-bottom: 0.6rem; }
+    .view-header h3 { 
+        cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0.5rem 1rem; 
+        border-bottom: 2px solid transparent; transition: 0.2s;
+    }
+    .view-header h3:hover { color: var(--primary); border-color: var(--primary); }
+    
     .word-list { display: grid; gap: 0.4rem; max-height: 50vh; overflow-y: auto; padding-right: 0.3rem; }
     .word-item { display: flex; align-items: flex-start; gap: 0.6rem; background: var(--card); padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); }
     .word-item .info { flex: 1; min-width: 0; }
@@ -71,9 +92,18 @@
     .word-item .status-tag { font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 3px; font-weight: 600; }
     .status-tag.new { background: rgba(59,130,246,0.2); color: var(--primary); }
     .status-tag.postponed { background: rgba(168,85,247,0.2); color: var(--purple); }
-    .status-tag.revision { background: rgba(16,185,129,0.2); color: var(--success); }
+    .status-tag.learned { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .status-tag.revision { background: rgba(219, 39, 119, 0.2); color: var(--pink); }
     .word-item .actions { display: flex; gap: 0.3rem; flex-shrink: 0; align-self: center; }
     .word-item .actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+
+    details.add-section { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 0.8rem; }
+    summary.add-summary { cursor: pointer; padding: 0.8rem; font-size: 0.95rem; color: var(--muted); list-style: none; display: flex; justify-content: center; }
+    summary.add-summary::after { content: '+'; margin-left: 0.5rem; font-weight: bold; }
+    details.add-section[open] summary.add-summary::after { content: '-'; }
+    .add-content { padding: 0 1rem 1rem; }
+    .input-group { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .input-group input { flex: 1; min-width: 100px; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
 
     .log-container { 
       background: #0a0f18; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; 
@@ -105,14 +135,9 @@
     .quick-import small { display: block; color: var(--muted); margin-bottom: 0.4rem; font-size: 0.8rem; }
     .quick-import .warn { color: var(--warning); font-size: 0.75rem; display: block; margin-top: 0.2rem; }
 
-    .add-section { width: 100%; max-width: 500px; padding: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 0.8rem; }
-    .add-section h3 { margin-bottom: 0.6rem; font-size: 0.95rem; color: var(--muted); }
-    .input-group { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
-    .input-group input { flex: 1; min-width: 100px; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
-
     @media (max-width: 480px) { 
       .flashcard .word { font-size: 1.7rem; } 
-      .flashcard { padding: 1.8rem 1.2rem; }
+      .flashcard { padding: 1.5rem 1rem; }
       .input-group { flex-direction: column; }
       .input-group input { width: 100%; }
       .nav-btn { min-width: 45px; padding: 0.35rem; font-size: 0.75rem; }
@@ -122,6 +147,7 @@
 <body>
   <header>
     <h1>📖 Word Learning</h1>
+    <div class="version">v1.8.2</div>
     <div class="list-selector">
       <select id="list-select" onchange="window.switchList(this.value)"></select>
       <button class="btn secondary" onclick="window.createNewList()">+ New</button>
@@ -130,7 +156,7 @@
     <div class="nav-row">
       <button class="nav-btn active" data-mode="learning">📖 Learn</button>
       <button class="nav-btn" data-mode="repeating">🔄 Repeat</button>
-      <button class="nav-btn list-btn" onclick="window.toggleList()">📋 List</button>
+      <button class="nav-btn list-btn" onclick="window.showListView()">📋 List</button>
       <button class="nav-btn log-btn" onclick="window.showLogView()">📜 Log</button>
       <button class="nav-btn settings-btn" onclick="window.toggleSettings()">⚙️</button>
     </div>
@@ -138,36 +164,39 @@
 
   <main>
     <section id="card-view" class="view-section">
-      <div class="card-wrap">
-        <div class="flashcard" id="main-card">
-          <div class="badge" id="q-badge">0/0</div>
-          <div class="word" id="c-word">---</div>
-          <div class="pron" id="c-pron"></div>
-          <div class="trans" id="c-trans">---</div>
-          <div class="meta-row">
-            <span id="c-counter">Seen: 0×</span>
-            <span id="c-revision">Last: Never</span>
+      <div class="card-section">
+        <div class="card-wrap">
+          <div class="flashcard" id="main-card">
+            <div class="badge" id="q-badge">0/0</div>
+            <div class="word" id="c-word">---</div>
+            <div class="pron" id="c-pron"></div>
+            <div class="trans" id="c-trans">---</div>
+            <div class="meta-row">
+              <span id="c-level">Lvl: 0</span>
+              <span id="c-counter">Seen: 0×</span>
+              <span id="c-revision">Last: Never</span>
+            </div>
+            <div class="hint">Tap to move · Select text freely</div>
           </div>
-          <div class="hint">Tap to move · Select text freely</div>
         </div>
-      </div>
-      <div class="controls">
-        <button class="btn secondary" onclick="window.prevCard()">⏮</button>
-        <button class="btn secondary" id="pause-btn" onclick="window.togglePause()">⏸</button>
-        <button class="btn secondary" onclick="window.nextCard()">⏭</button>
+        <div class="controls">
+          <button class="btn secondary" onclick="window.prevCard()">⏮</button>
+          <button class="btn secondary" id="pause-btn" onclick="window.togglePause()">⏸</button>
+          <button class="btn secondary" onclick="window.nextCard()">⏭</button>
+        </div>
       </div>
       <div class="status-msg" id="status">Add words to begin</div>
     </section>
 
     <section id="list-view" class="view-section list-view">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-        <h3 style="color:var(--muted); font-size:1rem;">📚 Library</h3>
-        <button class="btn secondary" onclick="window.toggleList()" style="padding:0.3rem 0.6rem; font-size:0.8rem;">Back</button>
+      <div class="view-header">
+        <h3 onclick="window.showCardView()">📚 Library</h3>
       </div>
       <div class="filter-row">
         <button class="filter-btn active" data-filter="all" onclick="window.setFilter('all')">All</button>
         <button class="filter-btn" data-filter="new" onclick="window.setFilter('new')">📖 New</button>
         <button class="filter-btn" data-filter="postponed" onclick="window.setFilter('postponed')">📥 Postponed</button>
+        <button class="filter-btn" data-filter="learned" onclick="window.setFilter('learned')">🟡 Learned</button>
         <button class="filter-btn" data-filter="revision" onclick="window.setFilter('revision')">🔄 Revision</button>
       </div>
       <div class="word-list" id="word-list"></div>
@@ -175,23 +204,24 @@
     </section>
 
     <section id="log-view" class="view-section list-view">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-        <h3 style="color:var(--muted); font-size:1rem;">📜 App Log</h3>
-        <button class="btn secondary" onclick="window.showLogView()" style="padding:0.3rem 0.6rem; font-size:0.8rem;">Back</button>
+      <div class="view-header">
+        <h3 onclick="window.showCardView()">📜 App Log</h3>
       </div>
       <div id="log-container" class="log-container"></div>
       <button class="btn secondary" onclick="window.clearLog()" style="margin-top:0.5rem; width:100%;">🗑 Clear Log</button>
     </section>
 
-    <section class="add-section">
-      <h3>➕ Add Word</h3>
-      <div class="input-group">
-        <input type="text" id="input-word" placeholder="Word">
-        <input type="text" id="input-pron" placeholder="Pronunciation">
-        <input type="text" id="input-trans" placeholder="Translation">
+    <details class="add-section">
+      <summary class="add-summary">➕ Add Word</summary>
+      <div class="add-content">
+        <div class="input-group">
+          <input type="text" id="input-word" placeholder="Word">
+          <input type="text" id="input-pron" placeholder="Pronunciation">
+          <input type="text" id="input-trans" placeholder="Translation">
+        </div>
+        <button class="btn success" onclick="window.addWord()" style="width:100%">Add</button>
       </div>
-      <button class="btn success" onclick="window.addWord()" style="width:100%">Add</button>
-    </section>
+    </details>
   </main>
 
   <!-- SETTINGS MODAL -->
@@ -250,8 +280,11 @@
       <select id="edit-status">
         <option value="new">📖 New</option>
         <option value="postponed">📥 Postponed</option>
+        <option value="learned">🟡 Learned</option>
         <option value="revision">🔄 Revision</option>
       </select>
+      <label>Level</label>
+      <input type="number" id="edit-level" min="0" max="24" style="background:var(--bg); opacity:0.7;">
       <label>Counter</label>
       <input type="number" id="edit-counter" readonly style="background:var(--bg); opacity:0.7;">
       <label>Last seen</label>
@@ -266,9 +299,30 @@
   <script>
     (function() {
       "use strict";
-      // ================= STATE =================
-      var STATUS_NEW = 'new', STATUS_POSTPONED = 'postponed', STATUS_REVISION = 'revision';
+      var STATUS_NEW = 'new', STATUS_POSTPONED = 'postponed', STATUS_LEARNED = 'learned', STATUS_REVISION = 'revision';
       var KEY_DATA = 'wApp_mobile_v1';
+      
+      var LEVELS = {
+        0:0, 1: 1000*60*1, 2: 1000*60*15, 3: 1000*60*60, 4: 1000*60*60*8, 5: 1*1000*60*60*24,
+        6: 2*1000*60*60*24, 7: 2*1000*60*60*24, 8: 5*1000*60*60*24, 9: 5*1000*60*60*24, 10: 7*1000*60*60*24,
+        11: 7*1000*60*60*24, 12: 20*1000*60*60*24, 13: 20*1000*60*60*24, 14: 50*1000*60*60*24, 15: 50*1000*60*60*24,
+        16: 100*1000*60*60*24, 17: 100*1000*60*60*24, 18: 200*1000*60*60*24, 19: 200*1000*60*60*24, 20: 400*1000*60*60*24,
+        21: 400*1000*60*60*24, 22: 800*1000*60*60*24, 23: 800*1000*60*60*24, 24: 1600*1000*60*60*24
+      };
+
+      var TEST_WORDS = [
+        { word: "Hello", translation: "Привет", pronunciation: "[həˈloʊ]" },
+        { word: "World", translation: "Мир", pronunciation: "[wɜːrld]" },
+        { word: "Apple", translation: "Яблоко", pronunciation: "[ˈæpəl]" },
+        { word: "Book", translation: "Книга", pronunciation: "[bʊk]" },
+        { word: "Water", translation: "Вода", pronunciation: "[ˈwɔːtər]" },
+        { word: "Sun", translation: "Солнце", pronunciation: "[sʌn]" },
+        { word: "Moon", translation: "Луна", pronunciation: "[muːn]" },
+        { word: "Friend", translation: "Друг", pronunciation: "[frɛnd]" },
+        { word: "Time", translation: "Время", pronunciation: "[taɪm]" },
+        { word: "Love", translation: "Любовь", pronunciation: "[lʌv]" }
+      ];
+
       var appData = { lists: {}, currentListId: null, nextListId: 1 };
       var words = [], settings = { wordTime: 4, transTime: 4, batchSize: 100 }, mode = 'learning', currentFilter = 'all';
       var currentBatchIds = [], queue = [], queueIndex = 0;
@@ -276,170 +330,181 @@
       var sessionRecursionGuard = false;
       var storageAvailable = true;
       var logEntries = [];
+      var srsTimerId = null;
       
-      // DOM Elements
-      var $, elCard, elWord, elPron, elTrans, elCounter, elRevision, elBadge, elStatus, elPauseBtn, logContainer;
+      var $, elCard, elWord, elPron, elTrans, elCounter, elRevision, elLevel, elBadge, elStatus, elPauseBtn, logContainer, repeatBtn;
 
-      // ================= GLOBAL FUNCTIONS (Defined early) =================
+      // ================= LOGGING SYSTEM =================
+      var logBuffer = [];
+      function initLogSystem() {
+        logContainer = $('log-container');
+        if (logContainer && logBuffer.length > 0) {
+           logBuffer.forEach(function(log) { appendLogToUI(log.type, log.msg); });
+           logBuffer = [];
+        }
+      }
+      function appendLogToUI(type, msg) {
+         if (!logContainer) return;
+         var entry = document.createElement('div');
+         entry.className = 'log-entry ' + (type === 'error' ? 'error' : type === 'warn' ? 'warn' : type === 'info' ? 'info' : 'log');
+         entry.textContent = msg;
+         logContainer.appendChild(entry);
+         logContainer.scrollTop = logContainer.scrollHeight;
+      }
+      function addLog(type, args) {
+          var time = new Date().toLocaleTimeString();
+          var msg = Array.prototype.map.call(args, function(a) {
+            try { return (typeof a === 'object' && a !== null) ? JSON.stringify(a).substring(0, 150) : String(a); } catch(e) { return String(a); }
+          }).join(' ');
+          var fullMsg = `[${time}] ${msg}`;
+          logEntries.push({ time, type, msg });
+          if (logEntries.length > 600) logEntries.shift();
+          if (logContainer) appendLogToUI(type, fullMsg);
+          else { logBuffer.push({type, msg: fullMsg}); if (logBuffer.length > 100) logBuffer.shift(); }
+      }
+      var oLog = console.log, oErr = console.error, oWarn = console.warn;
+      console.log = function() { addLog('log', arguments); oLog.apply(console, arguments); };
+      console.error = function() { addLog('error', arguments); oErr.apply(console, arguments); };
+      console.warn = function() { addLog('warn', arguments); oWarn.apply(console, arguments); };
+      window.onerror = function(msg, url, line, col, err) { addLog('error', ['❌ Error: ' + msg + ' (L:' + line + ')']); return false; };
+      window.addEventListener('unhandledrejection', function(e) { addLog('error', ['❌ Promise rejected: ' + (e.reason || e)]); });
+      console.log('📱 App initialized. Logging active.');
+
+      // ================= GLOBAL FUNCTIONS =================
       window.updatePauseBtn = function() { if (elPauseBtn) elPauseBtn.textContent = paused ? '▶' : '⏸'; };
       window.closeModal = function() { if ($) $('edit-modal').classList.remove('active'); editingId = null; };
-      window.clearLog = function() { if (!logContainer) return; logEntries = []; logContainer.innerHTML = ''; console.log('🗑 Log cleared'); };
+      window.clearLog = function() { 
+         if (!logContainer) return; 
+         logContainer.innerHTML = ''; logEntries = []; 
+         console.log('🗑 Log cleared'); 
+      };
 
-      // View Manager (Fixes navigation bug)
+      // ================= VIEW MANAGEMENT (FIXED & ROBUST) =================
       function hideAllViews() {
-        if ($ && $('card-view') && $('list-view') && $('log-view')) {
-          $('card-view').style.display = 'none';
-          $('list-view').classList.remove('active');
-          $('log-view').classList.remove('active');
-        }
+        if ($('card-view')) $('card-view').style.display = 'none';
+        if ($('list-view')) $('list-view').classList.remove('active');
+        if ($('log-view')) $('log-view').classList.remove('active');
       }
       function showView(viewName) {
         hideAllViews();
-        if (viewName === 'card') $('card-view').style.display = 'block';
-        else if (viewName === 'list') $('list-view').classList.add('active');
-        else if (viewName === 'log') $('log-view').classList.add('active');
+        if (viewName === 'card' && $('card-view')) $('card-view').style.display = 'block';
+        else if (viewName === 'list' && $('list-view')) { $('list-view').classList.add('active'); window.renderWordList(); }
+        else if (viewName === 'log' && $('log-view')) { $('log-view').classList.add('active'); initLogSystem(); }
       }
 
-      window.toggleList = function() { 
-        console.log('🔄 Toggle List View');
-        var isList = $('list-view').classList.contains('active');
-        if (isList) {
-          showView('card');
+      window.showCardView = function() { 
+        console.log('👀 Switching to Card View');
+        showView('card'); 
+        paused = false;
+        window.updatePauseBtn();
+        // Only rebuild session if queue is empty or exhausted
+        if (!queue.length || queueIndex >= queue.length) {
           window.startSession();
         } else {
-          showView('list');
-          paused = true; window.clearTimer(); window.updatePauseBtn();
-          window.renderWordList();
+          window.showCurrentCard();
         }
       };
 
+      window.showListView = function() { 
+        console.log('👀 Switching to List View');
+        showView('list'); 
+        paused = true; window.clearTimer(); window.updatePauseBtn(); 
+      };
+
       window.showLogView = function() { 
-        console.log('🔄 Toggle Log View');
-        var isLog = $('log-view').classList.contains('active');
-        if (isLog) {
-          showView('card');
-          window.startSession();
-        } else {
-          showView('log');
-          paused = true; window.clearTimer(); window.updatePauseBtn();
-        }
+        console.log('👀 Switching to Log View');
+        showView('log'); 
+        paused = true; window.clearTimer(); window.updatePauseBtn(); 
       };
 
       window.toggleSettings = function() { if ($) $('settings-modal').classList.toggle('active'); };
       window.setFilter = function(f) { if (f) { currentFilter = f; document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.filter === f); }); window.renderWordList(); } };
       
       window.switchList = function(id) { 
-        if (!appData || !appData.lists) return;
         console.log('🔀 Switching list to ID: ' + id); 
         if (appData.lists[id]) { 
-          appData.currentListId = id; 
-          window.saveData(); window.loadCurrentList(); window.syncBatchStatuses(); window.startSession(); 
-          if ($('list-view').classList.contains('active')) window.renderWordList(); 
+          appData.currentListId = id; window.saveData(); window.loadCurrentList(); window.recalculateSRS(); window.startSession(); 
         } 
       };
-
       window.createNewList = function() { 
         var name = prompt('List name:', 'List ' + appData.nextListId); if (!name) return; 
-        console.log('➕ Creating new list: ' + name);
         var id = String(appData.nextListId++); 
         appData.lists[id] = { id, name, words: [], settings: { wordTime: 4, transTime: 4, batchSize: 100 }, batch: [], nextWordId: 1 }; 
-        appData.currentListId = id; window.saveData(); window.renderListSelector(); window.loadCurrentList(); window.syncBatchStatuses(); window.startSession(); 
+        appData.currentListId = id; window.saveData(); window.renderListSelector(); window.loadCurrentList(); window.recalculateSRS(); window.startSession(); 
         window.toast('✅ Created'); 
       };
-
       window.deleteCurrentList = function() { 
         var list = appData.lists[appData.currentListId]; if (!confirm('Delete "' + list.name + '"?')) return; 
-        console.log('🗑 Deleting list: ' + list.name);
         delete appData.lists[appData.currentListId]; 
         var rem = Object.keys(appData.lists); appData.currentListId = rem.length ? rem[0] : null; 
         if (!appData.currentListId) window.createDefaultList(); 
-        window.saveData(); window.renderListSelector(); window.loadCurrentList(); window.syncBatchStatuses(); window.startSession(); 
+        window.saveData(); window.renderListSelector(); window.loadCurrentList(); window.recalculateSRS(); window.startSession(); 
         window.toast('🗑 Deleted'); 
       };
-
       window.applySettings = function() { 
-        console.log('⚙️ Applying settings'); 
         settings.wordTime = window.clamp(1, 60, parseInt($('set-word-time').value) || 4); 
         settings.transTime = window.clamp(1, 60, parseInt($('set-trans-time').value) || 4); 
         settings.batchSize = window.clamp(1, 1000, parseInt($('set-batch-size').value) || 100); 
-        window.saveCurrentList(); window.syncBatchStatuses(); window.toggleSettings(); window.toast('✅ Applied'); window.startSession(); 
+        window.saveCurrentList(); window.recalculateSRS(); window.toggleSettings(); window.toast('✅ Applied'); window.startSession(); 
       };
-
       window.resetBatch = function() { 
-        console.log('🔄 Resetting batch...');
-        words.forEach(function(w) { if (w.status === STATUS_NEW) w.status = STATUS_POSTPONED; }); 
-        currentBatchIds = []; window.saveCurrentList(); window.syncBatchStatuses(); window.toggleSettings(); window.toast('🔄 Reset'); window.startSession(); 
+        words.forEach(function(w) { if (w.status === STATUS_NEW) { w.status = STATUS_POSTPONED; w.level = 0; } }); 
+        currentBatchIds = []; window.saveCurrentList(); window.recalculateSRS(); window.toggleSettings(); window.toast('🔄 Reset'); window.startSession(); 
       };
-
-      window.clearAll = function() { if (!confirm('Delete ALL?')) return; console.log('⚠️ Clearing all data'); appData = { lists: {}, currentListId: null, nextListId: 1 }; window.saveData(); window.loadAll(); window.toast('🗑 Cleared'); };
+      window.clearAll = function() { if (!confirm('Delete ALL?')) return; appData = { lists: {}, currentListId: null, nextListId: 1 }; window.saveData(); window.loadAll(); window.toast('🗑 Cleared'); };
       window.prevCard = function() { window.clearTimer(); queueIndex = Math.max(0, queueIndex - 1); window.showCurrentCard(); };
       window.nextCard = function() { window.clearTimer(); window.advance(); };
-      
       window.togglePause = function() { 
-        paused = !paused; 
-        window.updatePauseBtn(); 
-        console.log('⏸ Pause toggled: ' + (paused ? 'ON' : 'OFF'));
+        paused = !paused; window.updatePauseBtn(); 
         if (!paused && phase !== 'idle') { 
           var r = phaseDuration - (Date.now() - phaseStart); 
           var n = phase === 'word' ? window.showTranslation : window.advance; 
           if (r <= 10) n(); else window.startPhase(r, n); 
-        } else { window.clearTimer(); } 
+        } else window.clearTimer(); 
       };
 
       window.addWord = function() { 
         var w = $('input-word').value.trim(), p = $('input-pron').value.trim(), t = $('input-trans').value.trim(); 
         if (!w || !t) return window.toast('❌ Word & translation'); 
-        console.log('➕ Adding word: ' + w);
         var id = String(appData.lists[appData.currentListId].nextWordId++); 
-        words.push({ id, word: w, pronunciation: p, translation: t, status: STATUS_POSTPONED, counter: 0, lastRevision: '' }); 
-        window.saveCurrentList(); window.syncBatchStatuses(); window.startSession(); 
+        words.push({ id, word: w, pronunciation: p, translation: t, status: STATUS_POSTPONED, counter: 0, level: 0, lastRevision: Date.now(), revisionViewsCount: 0, flipSide: false }); 
+        window.saveCurrentList(); window.recalculateSRS(); window.startSession(); 
+        if ($('list-view').classList.contains('active')) window.renderWordList();
         window.toast('✅ Added'); 
       };
       
       window.quickImport = function() { 
-        var raw = $('quick-import-area').value.trim(); 
-        if (!raw) return window.toast('❌ Paste word///translation'); 
+        var raw = $('quick-import-area').value.trim(); if (!raw) return window.toast('❌ Paste word///translation'); 
         var parts = raw.split('///').map(function(s) { return s.trim(); }).filter(Boolean); 
         if (parts.length % 2 !== 0) return window.toast('❌ Odd count'); 
-        console.log('📥 Quick importing ' + (parts.length / 2) + ' pairs...');
         var added = 0, list = appData.lists[appData.currentListId]; 
         for (var i=0; i<parts.length; i+=2) { 
           if (parts[i] && parts[i+1] && !words.some(function(x) { return x.word.toLowerCase() === parts[i].toLowerCase(); })) { 
-            words.push({ id: String(list.nextWordId++), word: parts[i], pronunciation: '', translation: parts[i+1], status: STATUS_POSTPONED, counter: 0, lastRevision: '' }); 
+            words.push({ id: String(list.nextWordId++), word: parts[i], pronunciation: '', translation: parts[i+1], status: STATUS_POSTPONED, counter: 0, level: 0, lastRevision: Date.now(), revisionViewsCount: 0, flipSide: false }); 
             added++; 
           } 
         } 
-        if (added) { window.saveCurrentList(); window.syncBatchStatuses(); window.startSession(); window.toast('✅ Imported ' + added); } 
+        if (added) { window.saveCurrentList(); window.recalculateSRS(); window.startSession(); if ($('list-view').classList.contains('active')) window.renderWordList(); window.toast('✅ Imported ' + added); } 
         else window.toast('⚠️ None'); 
       };
       
       window.importJSON = function(inp) { 
         var f = inp.files[0]; if (!f) return; 
-        console.log('📥 Importing JSON file: ' + f.name);
         var r = new FileReader(); 
         r.onload = function(e) { 
           try { 
             var d = JSON.parse(e.target.result); 
-            if (!Array.isArray(d) && d.words) d = d.words; 
-            if (!Array.isArray(d)) throw 1; 
+            if (!Array.isArray(d) && d.words) d = d.words; if (!Array.isArray(d)) throw 1; 
             var c=0, list = appData.lists[appData.currentListId]; 
-            var isNative = d.length > 0 && typeof d[0].word === 'string'; 
             d.forEach(function(it) { 
-              var w, t, p, st, counter, lastRev;
-              if (isNative) {
-                w = String(it.word || '').trim(); t = String(it.translation || '').trim(); p = it.pronunciation || ''; st = (it.status === STATUS_REVISION) ? STATUS_REVISION : STATUS_POSTPONED; counter = it.counter || 0; lastRev = it.lastRevision || '';
-              } else {
-                if (!it.word || !Array.isArray(it.word)) return;
-                w = String(it.word[0]||'').trim(); t = String(it.word[1]||'').trim(); p = String(it.word[2]||'').trim(); st = (String(it.direction).trim()==='1') ? STATUS_REVISION : STATUS_POSTPONED; counter = parseInt(it.counter)||0; lastRev = it.lastRevision||'';
-              }
+              var w = String(it.word || '').trim(), t = String(it.translation || '').trim(), p = it.pronunciation || ''; 
+              var st = (it.status === STATUS_REVISION) ? STATUS_REVISION : STATUS_POSTPONED; 
               if (!w || !t || words.some(function(x){return x.word.toLowerCase()===w.toLowerCase();})) return; 
-              words.push({id:String(list.nextWordId++), word:w, pronunciation:p, translation:t, status:st, counter:counter, lastRevision:lastRev}); 
-              c++; 
+              words.push({id:String(list.nextWordId++), word:w, pronunciation:p, translation:t, status:st, counter:it.counter||0, level:it.level||0, lastRevision: it.lastRevision || Date.now(), revisionViewsCount: 0, flipSide: false}); c++; 
             }); 
-            console.log('✅ Parsed ' + c + ' valid words from JSON');
-            if(c){ window.saveCurrentList(); window.syncBatchStatuses(); window.startSession(); if($('list-view').classList.contains('active')) window.renderWordList(); window.toast('✅ '+c); } 
+            if(c){ window.saveCurrentList(); window.recalculateSRS(); window.startSession(); if($('list-view').classList.contains('active')) window.renderWordList(); window.toast('✅ '+c); } 
             else window.toast('⚠️ None'); 
-          } catch(x) { console.error('JSON parse error:', x); window.toast('❌ Invalid JSON'); } 
+          } catch(x) { window.toast('❌ Invalid JSON'); } 
         }; 
         r.readAsText(f); inp.value=''; 
       };
@@ -447,239 +512,309 @@
       window.exportData = function() { 
         if (!storageAvailable) return window.toast('❌ Storage disabled'); 
         var list = appData.lists[appData.currentListId], a = document.createElement('a'); 
-        console.log('📤 Exporting ' + list.words.length + ' words...');
         a.href = URL.createObjectURL(new Blob([JSON.stringify(list.words, null, 2)], {type:'application/json'})); 
         a.download = list.name.replace(/\s+/g, '_') + '.json'; a.click(); window.toast('📤 Exported'); 
       };
-      
+
+      function getTimeRemaining(w) {
+        if (!w.lastRevision || w.status === STATUS_REVISION || w.status === STATUS_NEW || w.status === STATUS_POSTPONED) return '';
+        var lvl = w.level || 0, delay = LEVELS[lvl];
+        if (!delay) return '';
+        var nextDue = parseInt(w.lastRevision) + delay, diff = nextDue - Date.now();
+        if (diff <= 0) return "⏰ Now";
+        var mins = Math.floor(diff / 60000);
+        if (mins < 60) return "⏰ " + mins + "m";
+        var hours = Math.floor(mins / 60);
+        if (hours < 24) return "⏰ " + hours + "h";
+        var days = Math.floor(hours / 24);
+        if (days < 30) return "⏰ " + days + "d";
+        return "⏰ " + Math.floor(days / 30) + "mo";
+      }
+
       window.renderWordList = function() { 
         if (!words || !words.length) { $('empty-list').style.display = 'block'; return; }
-        window.syncBatchStatuses(); var c = $('word-list'); c.innerHTML = ''; 
+        window.recalculateSRS(); var c = $('word-list'); c.innerHTML = ''; 
         var f = currentFilter === 'all' ? words : words.filter(function(w) { return w.status === currentFilter; }); 
         if (!f.length) { $('empty-list').style.display = 'block'; return; } $('empty-list').style.display = 'none'; 
-        f.forEach(function(w) { var el = document.createElement('div'); el.className = 'word-item'; var ph = w.pronunciation ? '<div class="p">' + window.escHtml(w.pronunciation) + '</div>' : ''; var dt = w.lastRevision ? new Date(w.lastRevision).toLocaleDateString() : '-'; el.innerHTML = '<div class="info"><div class="w">' + window.escHtml(w.word) + '</div>' + ph + '<div class="t">' + window.escHtml(w.translation) + '</div><div class="meta">👁 ' + (w.counter || 0) + '</div></div><span class="status-tag ' + w.status + '">' + w.status + '</span><div class="actions"><button class="btn secondary" onclick="window.openEdit(\'' + w.id + '\')">✏️</button><button class="btn danger" onclick="window.deleteWord(\'' + w.id + '\')">🗑</button></div>'; c.appendChild(el); }); 
+        f.forEach(function(w) { 
+          var el = document.createElement('div'); el.className = 'word-item'; 
+          var ph = w.pronunciation ? '<div class="p">' + window.escHtml(w.pronunciation) + '</div>' : ''; 
+          var metaText = '👁 ' + (w.counter || 0) + ' | Lvl ' + (w.level||0);
+          var nextRev = getTimeRemaining(w); if (nextRev) metaText += ' | ' + nextRev;
+          el.innerHTML = '<div class="info"><div class="w">' + window.escHtml(w.word) + '</div>' + ph + '<div class="t">' + window.escHtml(w.translation) + '</div><div class="meta">' + metaText + '</div></div><span class="status-tag ' + w.status + '">' + w.status + '</span><div class="actions"><button class="btn secondary" onclick="window.openEdit(\'' + w.id + '\')">✏️</button><button class="btn danger" onclick="window.deleteWord(\'' + w.id + '\')">🗑</button></div>'; 
+          c.appendChild(el); 
+        }); 
       };
 
       window.openEdit = function(id) { 
         editingId = id; var w = words.find(function(x) { return x.id === id; }); if (!w) return; 
         $('edit-word').value = w.word || ''; $('edit-pron').value = w.pronunciation || ''; $('edit-trans').value = w.translation || ''; 
-        $('edit-status').value = w.status || STATUS_POSTPONED; $('edit-counter').value = w.counter || 0; 
+        $('edit-status').value = w.status || STATUS_POSTPONED; $('edit-level').value = w.level || 0; $('edit-counter').value = w.counter || 0; 
         $('edit-revision').value = w.lastRevision ? new Date(w.lastRevision).toLocaleString() : 'Never'; $('edit-modal').classList.add('active'); 
       };
-      
       window.saveEdit = function() { 
         var w = words.find(function(x) { return x.id === editingId; }); if (!w) return window.closeModal(); 
-        w.word = $('edit-word').value.trim() || w.word; w.pronunciation = $('edit-pron').value.trim(); 
-        w.translation = $('edit-trans').value.trim() || w.translation; var ns = $('edit-status').value; 
-        if (ns !== w.status) { w.status = ns; } 
-        window.saveCurrentList(); window.syncBatchStatuses(); window.closeModal(); window.renderWordList(); window.startSession(); 
-        window.toast('✅ Saved'); 
+        w.word = $('edit-word').value.trim() || w.word; w.pronunciation = $('edit-pron').value.trim(); w.translation = $('edit-trans').value.trim() || w.translation; 
+        var ns = $('edit-status').value; 
+        if (ns !== w.status) { 
+           w.status = ns; 
+           if (ns === STATUS_NEW || ns === STATUS_POSTPONED) w.level = 0; 
+        }
+        window.saveCurrentList(); window.recalculateSRS(); window.closeModal(); window.renderWordList(); window.startSession(); window.toast('✅ Saved'); 
       };
-      
       window.deleteWord = function(id) { 
-        if (!confirm('Delete?')) return; 
-        console.log('🗑 Deleting word ID: ' + id);
-        words = words.filter(function(w) { return w.id !== id; }); 
-        currentBatchIds = currentBatchIds.filter(function(b) { return b !== id; }); 
-        window.saveCurrentList(); window.syncBatchStatuses(); window.renderWordList(); window.startSession(); 
-        window.toast('🗑 Deleted'); 
+        words = words.filter(function(w) { return w.id !== id; }); currentBatchIds = currentBatchIds.filter(function(b) { return b !== id; }); 
+        window.saveCurrentList(); window.recalculateSRS(); window.renderWordList(); window.startSession(); window.toast('🗑 Deleted'); 
       };
 
-      // ================= LOGGING SYSTEM =================
-      function setupLogging() {
-        logContainer = $('log-container');
-        function addLog(type, args) {
-          var time = new Date().toLocaleTimeString();
-          var msg = Array.prototype.map.call(args, function(a) {
-            try { return (typeof a === 'object' && a !== null) ? JSON.stringify(a).substring(0, 150) : String(a); } catch(e) { return String(a); }
-          }).join(' ');
-          logEntries.push({ time, type, msg });
-          if (logEntries.length > 600) logEntries.shift();
-          if (logContainer) {
-            var entry = document.createElement('div');
-            entry.className = 'log-entry ' + (type === 'error' ? 'error' : type === 'warn' ? 'warn' : type === 'info' ? 'info' : 'log');
-            entry.textContent = `[${time}] ${msg}`;
-            logContainer.appendChild(entry);
-            logContainer.scrollTop = logContainer.scrollHeight;
-          }
-        }
-        var oLog = console.log, oErr = console.error, oWarn = console.warn;
-        console.log = function() { addLog('log', arguments); oLog.apply(console, arguments); };
-        console.error = function() { addLog('error', arguments); oErr.apply(console, arguments); };
-        console.warn = function() { addLog('warn', arguments); oWarn.apply(console, arguments); };
-        window.onerror = function(msg, url, line, col, err) { addLog('error', ['❌ Error: ' + msg + ' (L:' + line + ')']); return false; };
-        window.addEventListener('unhandledrejection', function(e) { addLog('error', ['❌ Promise rejected: ' + (e.reason || e)]); });
-        console.log('📱 App initialized. Logging active.');
+      function isDueForReview(w) {
+        if (!w.lastRevision) return true;
+        var lvl = Math.max(0, Math.min(24, parseInt(w.level) || 0));
+        return (Date.now() - parseInt(w.lastRevision)) >= LEVELS[lvl];
       }
 
-      // ================= INTERNAL LOGIC =================
-      window.createDefaultList = function() { 
-        var id = String(appData.nextListId++); 
-        appData.lists[id] = { id, name: 'My Words', words: [], settings: { wordTime: 4, transTime: 4, batchSize: 100 }, batch: [], nextWordId: 1 }; 
-        appData.currentListId = id; window.saveData(); 
+      window.recalculateSRS = function() {
+        var changed = false;
+        words.forEach(function(w) {
+          if (w.status === STATUS_REVISION || w.status === STATUS_LEARNED) {
+            if (isDueForReview(w)) {
+              if (w.status !== STATUS_REVISION) { w.status = STATUS_REVISION; changed = true; w.revisionViewsCount = 0; w.flipSide = false; }
+            } else { if (w.status !== STATUS_LEARNED) { w.status = STATUS_LEARNED; changed = true; } }
+          }
+        });
+        if (changed) window.saveCurrentList();
+        if (repeatBtn) repeatBtn.classList.toggle('repeat-active', words.some(function(w) { return w.status === STATUS_REVISION; }));
       };
+
+      function createDefaultList() { 
+        var id = String(appData.nextListId++); 
+        var defaultWords = TEST_WORDS.map(function(t, i) {
+           return { id: String(i+1), word: t.word, pronunciation: t.pronunciation, translation: t.translation, status: STATUS_POSTPONED, counter: 0, level: 0, lastRevision: Date.now(), revisionViewsCount: 0, flipSide: false };
+        });
+        appData.lists[id] = { id: id, name: 'Default Test List', words: defaultWords, settings: { wordTime: 4, transTime: 4, batchSize: 100 }, batch: [], nextWordId: 11 }; 
+        appData.currentListId = id; 
+        window.saveData(); 
+        console.log('✅ Created default list:', id);
+      }
 
       window.loadCurrentList = function() { 
-        var list = appData.lists[appData.currentListId]; if (!list) return; 
-        words = list.words || []; settings = list.settings || { wordTime: 4, transTime: 4, batchSize: 100 }; currentBatchIds = list.batch || []; 
+        var list = appData.lists[appData.currentListId]; 
+        if (!list) { console.error('❌ Cannot load list:', appData.currentListId); return; }
+        words = list.words || []; 
+        settings = list.settings || { wordTime: 4, transTime: 4, batchSize: 100 }; 
+        currentBatchIds = (list.batch || []).map(String); 
         $('set-word-time').value = settings.wordTime; $('set-trans-time').value = settings.transTime; $('set-batch-size').value = settings.batchSize; 
-        console.log('📋 Loading current list: ' + list.name + ' | Words: ' + words.length + ' | Batch size: ' + settings.batchSize);
-        words.forEach(function(w) { w.id = String(w.id); if (w.status !== STATUS_REVISION) w.status = STATUS_POSTPONED; w.lastRevision = w.lastRevision || ''; }); 
+        console.log(`💾 Loaded list: "${list.name}" | ${words.length} words | Batch: ${currentBatchIds.length}`);
+        
+        words.forEach(function(w) { 
+          w.id = String(w.id); 
+          if ([STATUS_NEW, STATUS_POSTPONED, STATUS_LEARNED, STATUS_REVISION].indexOf(w.status) === -1) w.status = STATUS_POSTPONED;
+          w.level = parseInt(w.level) || 0; w.lastRevision = w.lastRevision || Date.now(); 
+          w.revisionViewsCount = parseInt(w.revisionViewsCount) || 0; w.flipSide = !!w.flipSide;
+        }); 
       };
 
-      window.saveCurrentList = function() { var list = appData.lists[appData.currentListId]; if (!list) return; list.words = words; list.settings = settings; list.batch = currentBatchIds; window.saveData(); };
+      window.renderListSelector = function() { 
+        var sel = $('list-select'); sel.innerHTML = ''; 
+        Object.keys(appData.lists).forEach(function(id) { 
+           var list = appData.lists[id]; var opt = document.createElement('option'); 
+           opt.value = list.id; opt.textContent = list.name; 
+           if (String(list.id) === String(appData.currentListId)) opt.selected = true; 
+           sel.appendChild(opt); 
+        }); 
+        console.log('📋 Select populated with', sel.options.length, 'lists.');
+      };
+
+      window.saveCurrentList = function() { 
+        var list = appData.lists[appData.currentListId]; if (!list) return; 
+        list.words = words; list.settings = settings; list.batch = currentBatchIds; window.saveData(); 
+      };
       window.saveData = function() { 
         if (!storageAvailable) return;
-        try { 
-          localStorage.setItem(KEY_DATA, JSON.stringify(appData)); 
-          console.log('💾 Data saved to localStorage successfully');
-        } catch(e) { console.error('❌ Save failed:', e); window.toast('❗ Save failed'); }
+        try { localStorage.setItem(KEY_DATA, JSON.stringify(appData)); } catch(e) { console.error('❌ Save failed:', e); window.toast('❗ Save failed'); }
       };
 
+      // NEW BATCH LOGIC: Strict Priority without Demotion
       window.syncBatchStatuses = function() { 
-        var batchSet = new Set(currentBatchIds.map(String)); 
-        var changed = false; 
-        words.forEach(function(w) { 
-          if (batchSet.has(String(w.id))) { if (w.status !== STATUS_NEW) { w.status = STATUS_NEW; changed = true; } }
-          else if (w.status === STATUS_NEW) { w.status = STATUS_POSTPONED; changed = true; }
-        }); 
-        if (changed) { console.log('🔄 Status sync applied'); window.saveCurrentList(); }
+        var now = Date.now();
+        var newWords = words.filter(function(w) { return w.status === STATUS_NEW; });
+        newWords.sort(function(a, b) { return (a.lastRevision || 0) - (b.lastRevision || 0); });
+        
+        var postponedWords = words.filter(function(w) { return w.status === STATUS_POSTPONED; });
+        postponedWords.sort(function(a, b) { return (a.lastRevision || 0) - (b.lastRevision || 0); });
+
+        var newBatchIds = [];
+        var currentCount = 0;
+        var newSelected = 0, postponedSelected = 0;
+
+        // Priority 1: Fill with NEW words (up to batchSize)
+        for (var i = 0; i < newWords.length; i++) {
+           if (currentCount >= settings.batchSize) break;
+           newBatchIds.push(String(newWords[i].id));
+           currentCount++;
+           newSelected++;
+        }
+
+        // Priority 2: Top up with POSTPONED words (Promoting them to NEW)
+        if (currentCount < settings.batchSize) {
+           for (var j = 0; j < postponedWords.length; j++) {
+              if (currentCount >= settings.batchSize) break;
+              var w = postponedWords[j];
+              w.status = STATUS_NEW;
+              newBatchIds.push(String(w.id));
+              currentCount++;
+              postponedSelected++;
+           }
+        }
+
+        currentBatchIds = newBatchIds;
+        if (newSelected > 0 || postponedSelected > 0) {
+           console.log(`✅ Batch Refilled: ${newSelected} New, ${postponedSelected} Postponed (Promoted)`);
+           window.saveCurrentList();
+        }
       };
 
+      // FIX: Robust Start Session
       window.startSession = function() { 
         if (sessionRecursionGuard) return;
         sessionRecursionGuard = true;
         try {
-          console.log('🚀 Starting session | Mode: ' + mode + ' | Batch: ' + currentBatchIds.length + ' / ' + settings.batchSize);
+          console.log(`🚀 Starting session: mode=${mode}, words=${words.length}, batch=${currentBatchIds.length}`);
+          showView('card'); 
+          window.recalculateSRS(); 
           paused = false; phase = 'idle'; window.clearTimer(); queueIndex = 0; window.updatePauseBtn();
+          
           if (mode === 'learning') { 
-            window.syncBatchStatuses(); 
-            var allNew = words.filter(function(w) { return w.status === STATUS_NEW; }); 
-            currentBatchIds = currentBatchIds.filter(function(id) { return allNew.some(function(w) { return w.id === id; }); }); 
-            if (currentBatchIds.length > settings.batchSize) {
-              currentBatchIds = currentBatchIds.slice(0, settings.batchSize);
-              window.saveCurrentList(); window.syncBatchStatuses();
-            } else if (currentBatchIds.length < settings.batchSize) {
-              var candidates = words.filter(function(w) { return w.status === STATUS_POSTPONED && currentBatchIds.indexOf(w.id) === -1; }); 
-              var shuffled = window.shuffleArray(candidates); 
-              var needed = settings.batchSize - currentBatchIds.length;
-              if (needed > 0 && shuffled.length > 0) { currentBatchIds.push.apply(currentBatchIds, shuffled.slice(0, needed).map(function(w) { return w.id; })); window.saveCurrentList(); window.syncBatchStatuses(); }
-            }
-            if (currentBatchIds.length === 0) { window.showEmptyCard('No POSTPONED words. Add/import more.'); return; } 
-            queue = window.shuffleArray(currentBatchIds); 
+            if (words.length === 0) { window.showEmptyCard('No words. Add or import words to begin.'); return; }
+            window.syncBatchStatuses();
+
+            if (currentBatchIds.length === 0) { 
+               var postponed = words.filter(function(w) { return w.status === STATUS_POSTPONED; });
+               if (postponed.length > 0) window.showEmptyCard('Batch is empty. Tap "Reset Batch" to rebuild.');
+               else window.showEmptyCard('No words available. Add more.');
+               return; 
+            } 
+            queue = window.shuffleArray(currentBatchIds.map(function(id){ return {id: id, flip: false, skip: false}; })); 
           } else { 
-            var revIds = words.filter(function(w) { return w.status === STATUS_REVISION; }).map(function(w) { return w.id; }); 
-            if (revIds.length === 0) { window.showEmptyCard('Master words first'); return; } 
-            queue = window.shuffleArray(revIds); 
+            var due = words.filter(function(w) { return w.status === STATUS_REVISION && w.revisionViewsCount < 2; });
+            if (due.length === 0) { window.showEmptyCard('✅ All caught up!'); return; } 
+            queue = window.shuffleArray(due.map(function(w){ return {id: w.id, flip: w.flipSide, skip: false}; })); 
           } 
-          console.log('✅ Queue built: ' + queue.length + ' cards');
           window.updateBadge(); window.showCurrentCard(); 
-        } finally { sessionRecursionGuard = false; }
+        } catch(e) {
+           console.error('❌ startSession failed:', e);
+           window.showEmptyCard('Session error. Check logs.');
+        } finally { 
+           sessionRecursionGuard = false; 
+        }
       };
 
       window.showCurrentCard = function() { 
         while (queueIndex < queue.length) { 
-          var id = queue[queueIndex]; var item = words.find(function(w) { return w.id === String(id); }); 
-          if (item) { window.displayWord(item); return; } queue.splice(queueIndex, 1); 
+          var entry = queue[queueIndex]; 
+          if (entry.skip) { queueIndex++; continue; }
+          var item = words.find(function(w) { return String(w.id) === String(entry.id); }); 
+          if (!item) { entry.skip = true; queueIndex++; continue; }
+          window.displayWord(item, entry.flip); return;
         } 
-        if (queue.length === 0) window.startSession(); 
+        if (queueIndex >= queue.length) window.startSession(); 
       };
 
-      window.displayWord = function(item) { 
-        phase = 'word'; item.lastRevision = new Date().toISOString(); 
-        elWord.textContent = item.word; elPron.textContent = item.pronunciation || ''; elTrans.textContent = item.translation; elTrans.classList.remove('visible'); 
-        elCounter.textContent = 'Seen: ' + (item.counter || 0) + '×'; elRevision.textContent = 'Last: ' + (item.lastRevision ? new Date(item.lastRevision).toLocaleString() : 'Never'); 
-        item.counter = (item.counter || 0) + 1; window.saveCurrentList(); window.updateBadge(); 
+      window.displayWord = function(item, isFlipped) { 
+        phase = 'word'; var now = Date.now(); 
+        item.revisionViewsCount++; item.flipSide = !isFlipped; window.saveCurrentList();
+        elPron.textContent = item.pronunciation || ''; 
+        elWord.textContent = isFlipped ? item.translation : item.word; 
+        elTrans.textContent = isFlipped ? item.word : item.translation;
+        elTrans.classList.remove('visible'); 
+        elCounter.textContent = 'Seen: ' + (item.counter || 0) + '×'; 
+        elRevision.textContent = 'Last: ' + (item.lastRevision ? new Date(item.lastRevision).toLocaleString() : 'Never');
+        elLevel.textContent = 'Lvl: ' + (item.level || 0);
+        
+        // Mark as learned after seeing BOTH sides in revision mode
+        if (mode === 'repeating' && item.revisionViewsCount >= 2) {
+          item.status = STATUS_LEARNED; item.level = Math.min((item.level || 0) + 1, 24); item.lastRevision = Date.now(); 
+          window.saveCurrentList(); window.recalculateSRS(); 
+          queue.forEach(function(qE) { if (String(qE.id) === String(item.id)) qE.skip = true; });
+        }
+        item.counter = (item.counter || 0) + 1; window.updateBadge(); 
         window.startPhase(settings.wordTime * 1000, window.showTranslation); 
       };
 
-      window.showTranslation = function() { phase = 'trans'; elTrans.classList.add('visible'); window.startPhase(settings.transTime * 1000, window.advance); };
+      window.showTranslation = function() { 
+        phase = 'trans'; 
+        if (elPron) { var item = words.find(function(w){return String(w.id)===String(queue[queueIndex]?.id)}); elPron.textContent = item ? (item.pronunciation || '') : ''; }
+        elTrans.classList.add('visible'); window.startPhase(settings.transTime * 1000, window.advance); 
+      };
       window.advance = function() { queueIndex++; if (queueIndex >= queue.length) window.startSession(); else window.showCurrentCard(); };
       window.startPhase = function(ms, cb) { phaseStart = Date.now(); phaseDuration = ms; timerId = setTimeout(function() { if (!paused) cb(); }, ms); };
       window.clearTimer = function() { clearTimeout(timerId); timerId = null; };
-      window.updateBadge = function() { if (elBadge) elBadge.textContent = mode === 'learning' ? queue.length + '/' + currentBatchIds.length : queue.length; };
-      
-      window.showEmptyCard = function(msg) { 
-        if(!elWord) return; 
-        elWord.textContent = '📭'; if(elPron) elPron.textContent = ''; 
-        if(elTrans) { elTrans.textContent = msg; elTrans.classList.remove('visible'); } 
-        if(elCounter) elCounter.textContent = ''; if(elRevision) elRevision.textContent = 'Last: Never'; 
-        if(elBadge) elBadge.textContent = '0'; if(elStatus) elStatus.textContent = ''; 
+      window.updateBadge = function() { 
+        if (!elBadge) return;
+        elBadge.textContent = mode === 'learning' ? queue.filter(e => !e.skip).length + ' / ' + currentBatchIds.length : new Set(queue.filter(e=>!e.skip).map(e=>e.id)).size + ' words';
       };
-
-      window.renderListSelector = function() { var sel = $('list-select'); sel.innerHTML = ''; Object.keys(appData.lists).forEach(function(id) { var list = appData.lists[id]; var opt = document.createElement('option'); opt.value = list.id; opt.textContent = list.name; if (list.id === appData.currentListId) opt.selected = true; sel.appendChild(opt); }); };
-
-      // ================= UTILS =================
+      window.showEmptyCard = function(msg) { 
+        if(!elWord) return; elWord.textContent='📭'; if(elPron) elPron.textContent=''; if(elTrans) {elTrans.textContent=msg; elTrans.classList.remove('visible');} 
+        if(elCounter) elCounter.textContent=''; if(elRevision) elRevision.textContent='Last: Never'; if(elLevel) elLevel.textContent='Lvl: 0'; if(elBadge) elBadge.textContent='0'; if(elStatus) elStatus.textContent=''; 
+      };
       window.clamp = function(a,b,v){return Math.min(b,Math.max(a,v||a))};
       window.escHtml = function(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML};
       window.shuffleArray = function(arr){var a=[...arr];for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a};
       window.toast = function(m){ if(elStatus) { elStatus.textContent = m; setTimeout(function(){if(elStatus.textContent===m) elStatus.textContent=''},2000); } };
 
-      // ================= INIT =================
+      // INIT
       window.loadAll = function() {
         console.log('🔄 Initializing app...');
-        console.log('📦 Storage available: ' + storageAvailable);
         try {
           var raw = localStorage.getItem(KEY_DATA);
-          if (!raw) { console.log('⚠️ No data in localStorage. Creating default.'); }
-          else { console.log('💾 Found data in localStorage. Size: ' + (raw.length/1024).toFixed(2) + ' KB'); }
-          var d = JSON.parse(localStorage.getItem(KEY_DATA));
-          if (d) appData = d;
-          
-          console.log('📂 Total lists found: ' + Object.keys(appData.lists || {}).length);
-          Object.keys(appData.lists || {}).forEach(function(id) {
-            var list = appData.lists[id];
-            console.log('  📝 List "' + list.name + '" (' + id + '): ' + (list.words ? list.words.length : 0) + ' words');
-          });
-        } catch(e) { console.error('❌ Load failed:', e); }
+          var d = raw ? JSON.parse(raw) : null;
+          if (d) { appData = d; appData.nextListId = parseInt(appData.nextListId) || 1; }
+        } catch(e) { console.error('❌ Load failed:', e); appData = { lists: {}, currentListId: null, nextListId: 1 }; }
         
         if (!appData.currentListId || !appData.lists || !appData.lists[appData.currentListId]) {
-          console.log('🆕 No active list, creating default...');
+          console.log('🆕 Creating default list...');
           window.createDefaultList();
-        } else {
-          console.log('✅ Active list: ' + appData.lists[appData.currentListId].name + ' (ID: ' + appData.currentListId + ')');
-        }
-        window.loadCurrentList(); window.renderListSelector(); window.syncBatchStatuses(); window.startSession();
+        } else console.log('📋 Active list:', appData.currentListId);
+        
+        window.renderListSelector();
+        window.loadCurrentList();
+        window.recalculateSRS();
+        window.startSession();
       };
 
       function initApp() {
-        try { localStorage.setItem('__test__', '1'); localStorage.removeItem('__test__'); } catch(e) { storageAvailable = false; console.warn('⚠️ localStorage disabled or blocked by browser.'); }
-        
+        try { localStorage.setItem('__test__', '1'); localStorage.removeItem('__test__'); } catch(e) { storageAvailable = false; }
         $ = function(id) { return document.getElementById(id); };
         elCard = $('main-card'); elWord = $('c-word'); elPron = $('c-pron'); elTrans = $('c-trans');
-        elCounter = $('c-counter'); elRevision = $('c-revision'); elBadge = $('q-badge'); elStatus = $('status'); elPauseBtn = $('pause-btn');
+        elCounter = $('c-counter'); elRevision = $('c-revision'); elLevel = $('c-level'); elBadge = $('q-badge'); elStatus = $('status'); elPauseBtn = $('pause-btn'); repeatBtn = document.querySelector('[data-mode="repeating"]');
+        initLogSystem();
         
-        if (!elCard) { console.error('CRITICAL: #main-card not found'); return; }
-        
-        setupLogging();
-        
-        // Event Listeners
-        try {
-          elCard.addEventListener('touchstart', function(e) { e.stopPropagation(); }, {passive: true});
-          elCard.addEventListener('click', function(e) { 
-            if (queue.length === 0) return; var sel = window.getSelection(); 
-            if (sel && sel.type === 'Range' && sel.toString().trim().length > 0) return; 
-            var item = words.find(function(w) { return w.id === queue[queueIndex]; }); if (!item) return; 
-            if (mode === 'learning') { item.status = STATUS_REVISION; currentBatchIds = currentBatchIds.filter(function(id) { return id !== item.id; }); window.saveCurrentList(); window.syncBatchStatuses(); window.toast('✅ Learned'); } 
-            else { item.status = STATUS_POSTPONED; window.saveCurrentList(); window.syncBatchStatuses(); window.toast('🔄 Postponed'); } 
-            window.clearTimer(); window.advance(); 
-          });
-        } catch(err) { console.error('Card listener failed:', err); }
+        elCard.addEventListener('click', function(e) { 
+          if (queue.length === 0) return; var sel = window.getSelection(); if (sel && sel.type === 'Range' && sel.toString().trim().length > 0) return; 
+          var entry = queue[queueIndex]; if (!entry || entry.skip) return; var item = words.find(function(w) { return String(w.id) === String(entry.id); }); if (!item) return; 
+          if (mode === 'learning') { item.status = STATUS_REVISION; item.level = 1; item.lastRevision = Date.now(); item.revisionViewsCount = 0; item.flipSide = false; currentBatchIds = currentBatchIds.filter(function(id) { return String(id) !== String(item.id); }); window.saveCurrentList(); window.recalculateSRS(); window.toast('✅ Moved to Revision'); } 
+          else { 
+             item.status = STATUS_NEW; 
+             item.level = 0; 
+             item.lastRevision = Date.now(); 
+             item.revisionViewsCount = 0; 
+             item.flipSide = false; 
+             window.saveCurrentList(); window.recalculateSRS(); window.toast('🔄 Moved to Learn'); 
+          } 
+          window.clearTimer(); window.advance(); 
+        });
 
-        document.querySelectorAll('[data-mode]').forEach(function(btn) { btn.addEventListener('click', function() { if (btn.dataset.mode === mode) return; mode = btn.dataset.mode; document.querySelectorAll('[data-mode]').forEach(function(b) { b.classList.toggle('active', b.dataset.mode === mode); }); window.startSession(); }); });
-        
+        document.querySelectorAll('[data-mode]').forEach(function(btn) { 
+           btn.addEventListener('click', function() { if (btn.dataset.mode === mode) return; mode = btn.dataset.mode; document.querySelectorAll('[data-mode]').forEach(function(b) { b.classList.toggle('active', b.dataset.mode === mode); }); window.startSession(); }); 
+        });
         $('edit-modal').addEventListener('click', function(e) { if(e.target===$('edit-modal')) window.closeModal(); });
         $('settings-modal').addEventListener('click', function(e) { if(e.target===$('settings-modal')) window.toggleSettings(); });
-        
-        console.log('✅ DOM ready. Starting load sequence...');
+        srsTimerId = setInterval(window.recalculateSRS, 60000);
         window.loadAll();
       }
 
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initApp);
-      } else {
-        initApp();
-      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
+      else initApp();
     })();
   </script>
 </body>
