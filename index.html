@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Word Learning - SRS</title>
   <style>
+    html { font-size: 150%; }
     :root {
       --bg: #0b1220; --card: #151f32; --text: #e2e8f0; --muted: #94a3b8;
       --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --purple: #a855f7; --pink: #db2777;
@@ -135,10 +136,14 @@
     .quick-import small { display: block; color: var(--muted); margin-bottom: 0.4rem; font-size: 0.8rem; }
     .quick-import .warn { color: var(--warning); font-size: 0.75rem; display: block; margin-top: 0.2rem; }
 
-    #storage-warning {
-      display: none; background: rgba(239,68,68,0.2); color: var(--danger); padding: 0.5rem; 
-      border-radius: 6px; margin-bottom: 0.5rem; font-size: 0.8rem; text-align: center;
+    #loading-overlay {
+      position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 1000; transition: opacity 0.3s;
     }
+    .spinner { width: 40px; height: 40px; border: 4px solid var(--border); border-top-color: var(--primary);
+      border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     @media (max-width: 480px) { 
       .flashcard .word { font-size: 2.55rem; } 
       .flashcard { padding: 2.25rem 1.5rem; }
@@ -149,10 +154,11 @@
   </style>
 </head>
 <body>
+  <div id="loading-overlay"><div class="spinner"></div><div>Loading Data...</div></div>
+
   <header>
     <h1>📖 Word Learning</h1>
-    <div class="version">v1.8.8</div>
-    <div id="storage-warning">⚠️ Storage full! Data saved in memory only. Export to free up space.</div>
+    <div class="version">v1.9.1 (IndexedDB)</div>
     <div class="list-selector">
       <select id="list-select" onchange="window.switchList(this.value)"></select>
       <button class="btn secondary" onclick="window.createNewList()">+ New</button>
@@ -314,7 +320,6 @@
     (function() {
       "use strict";
       var STATUS_NEW = 'new', STATUS_POSTPONED = 'postponed', STATUS_LEARNED = 'learned', STATUS_REVISION = 'revision';
-      var KEY_DATA = 'wApp_mobile_v1';
       
       var LEVELS = {
         0:0, 1: 1000*60*1, 2: 1000*60*15, 3: 1000*60*60, 4: 1000*60*60*8, 5: 1*1000*60*60*24,
@@ -342,49 +347,70 @@
       var currentBatchIds = [], queue = [], queueIndex = 0;
       var paused = false, phase = 'idle', phaseStart = 0, phaseDuration = 0, timerId = null, editingId = null;
       var sessionRecursionGuard = false;
-      var storageAvailable = true, storageQuotaExceeded = false;
       var logEntries = [];
       var srsTimerId = null;
       var currentView = 'card'; 
       
       var $, elCard, elWord, elPron, elTrans, elCounter, elRevision, elLevel, elBadge, elStatus, elPauseBtn, logContainer, repeatBtn;
 
-      // ================= STORAGE HANDLING =================
-      var saveTimeout = null, dataHash = '';
-      function queueSave() {
-         if (!storageAvailable) return;
-         if (saveTimeout) clearTimeout(saveTimeout);
-         saveTimeout = setTimeout(window.saveData, 500); // Debounce saves
+      // ================= INDEXEDDB HANDLER =================
+      var DB_NAME = 'WordAppDB', DB_STORE = 'appdata', dbConn = null, saveTimeout = null;
+
+      async function openDB() {
+        if (dbConn) return dbConn;
+        return new Promise((res, rej) => {
+          var req = indexedDB.open(DB_NAME, 1);
+          req.onupgradeneeded = e => { e.target.result.createObjectStore(DB_STORE); };
+          req.onsuccess = e => { dbConn = e.target.result; res(dbConn); };
+          req.onerror = e => rej(e.target.error);
+        });
       }
 
-      window.saveData = function() {
-         if (storageQuotaExceeded) return; // Skip if quota is full
-         try {
-            var json = JSON.stringify(appData);
-            if (json === dataHash) return; // Skip if unchanged
-            localStorage.setItem(KEY_DATA, json);
-            dataHash = json;
-            updateStorageInfo();
-         } catch(e) {
-            if (e.name === 'QuotaExceededError' || e.code === 22) {
-               storageQuotaExceeded = true;
-               document.getElementById('storage-warning').style.display = 'block';
-               console.warn('⚠️ localStorage quota exceeded. Running in-memory only.');
-               window.toast('💾 Storage full! Export to free space.');
-            } else {
-               console.error('❌ Save failed:', e);
-            }
-         }
-      };
+      async function saveData() {
+        if (!dbConn) { try { await openDB(); } catch(e) { return; } }
+        try {
+          var tx = dbConn.transaction(DB_STORE, 'readwrite');
+          tx.objectStore(DB_STORE).put(appData, 'state');
+          await new Promise(r => { tx.oncomplete = r; tx.onerror = () => r(); });
+          updateStorageInfo();
+        } catch(e) {
+          console.error('❌ IndexedDB save failed:', e);
+          window.toast('💾 Storage full! Export to backup.');
+        }
+      }
 
-      function updateStorageInfo() {
-         var el = document.getElementById('storage-info');
-         if (!el) return;
-         try {
-            var used = localStorage.getItem(KEY_DATA)?.length || 0;
-            var mb = (used * 2 / 1024 / 1024).toFixed(2);
-            el.textContent = `💾 Used: ~${mb}MB / 5MB`;
-         } catch(e) { el.textContent = '💾 Storage info unavailable'; }
+      function queueSave() {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(saveData, 400);
+      }
+
+      async function loadData() {
+        try {
+          await openDB();
+          var tx = dbConn.transaction(DB_STORE, 'readonly');
+          var req = tx.objectStore(DB_STORE).get('state');
+          var data = await new Promise(r => { req.onsuccess = () => r(req.result); req.onerror = () => r(null); });
+          if (data) { appData = data; appData.nextListId = parseInt(appData.nextListId) || 1; }
+        } catch(e) { console.warn('⚠️ DB load failed, starting fresh'); }
+        
+        if(!appData.currentListId || !appData.lists[appData.currentListId]) createDefaultList();
+        renderListSelector(); loadCurrentList(); recalculateSRS(); startSession();
+        updateStorageInfo();
+        
+        var loader = document.getElementById('loading-overlay');
+        if(loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 300); }
+      }
+
+      async function updateStorageInfo() {
+        var el = document.getElementById('storage-info'); if (!el) return;
+        if (navigator.storage && navigator.storage.estimate) {
+          try {
+            var est = await navigator.storage.estimate();
+            var used = (est.usage / 1024 / 1024).toFixed(1);
+            var quota = (est.quota / 1024 / 1024).toFixed(0);
+            el.textContent = `💾 IndexedDB: ~${used}MB / ~${quota}MB`;
+          } catch(e) { el.textContent = '💾 IndexedDB: Active'; }
+        } else { el.textContent = '💾 IndexedDB: Active'; }
       }
 
       // ================= LOGGING SYSTEM =================
@@ -392,7 +418,7 @@
       function initLogSystem() {
         logContainer = document.getElementById('log-container');
         if (logContainer && logBuffer.length > 0) {
-           logBuffer.forEach(function(log) { appendLogToUI(log.type, log.msg); });
+           logBuffer.forEach(log => appendLogToUI(log.type, log.msg));
            logBuffer = [];
         }
       }
@@ -406,7 +432,7 @@
       }
       function addLog(type, args) {
           var time = new Date().toLocaleTimeString();
-          var msg = Array.prototype.map.call(args, function(a) {
+          var msg = Array.prototype.map.call(args, a => {
             try { return (typeof a === 'object' && a !== null) ? JSON.stringify(a).substring(0, 150) : String(a); } catch(e) { return String(a); }
           }).join(' ');
           var fullMsg = `[${time}] ${msg}`;
@@ -415,38 +441,35 @@
           if (logContainer) appendLogToUI(type, fullMsg);
           else { logBuffer.push({type, msg: fullMsg}); if (logBuffer.length > 100) logBuffer.shift(); }
       }
-      var oLog = console.log, oErr = console.error, oWarn = console.warn;
-      console.log = function() { addLog('log', arguments); oLog.apply(console, arguments); };
-      console.error = function() { addLog('error', arguments); oErr.apply(console, arguments); };
-      console.warn = function() { addLog('warn', arguments); oWarn.apply(console, arguments); };
-      window.onerror = function(msg, url, line, col, err) { addLog('error', ['❌ Error: ' + msg + ' (L:' + line + ')']); return false; };
-      window.addEventListener('unhandledrejection', function(e) { addLog('error', ['❌ Promise rejected: ' + (e.reason || e)]); });
-      console.log('📱 App initialized. Logging active.');
+      console.log = (function(orig){return function(){addLog('log',arguments);orig.apply(console,arguments);}})(console.log);
+      console.error = (function(orig){return function(){addLog('error',arguments);orig.apply(console,arguments);}})(console.error);
+      console.warn = (function(orig){return function(){addLog('warn',arguments);orig.apply(console,arguments);}})(console.warn);
+      window.onerror = (m, u, l, c, e) => addLog('error', ['❌ Error: ' + m + ' (L:' + l + ')']);
+      window.addEventListener('unhandledrejection', e => addLog('error', ['❌ Promise rejected: ' + (e.reason || e)]));
+      console.log('📱 App initialized. IndexedDB active.');
 
       // ================= VIEW STATE MACHINE =================
       function hideAllViews() {
-        var cv = document.getElementById('card-view');
-        var lv = document.getElementById('list-view');
-        var lg = document.getElementById('log-view');
-        if (cv) cv.style.display = 'none';
-        if (lv) lv.classList.remove('active');
-        if (lg) lg.classList.remove('active');
+        ['card-view','list-view','log-view'].forEach(id => {
+           var el = document.getElementById(id);
+           if(el) el.style.display = id==='card-view'?'none':'block';
+           if(id!=='card-view' && el) el.classList.remove('active');
+        });
       }
 
       window.switchView = function(target) {
-        console.log(`🔘 Click received: Switch to '${target}'`);
         if (currentView === target) return;
         currentView = target;
         hideAllViews();
         if (target === 'card') {
            document.getElementById('card-view').style.display = 'block';
-           if (paused) { paused = false; console.log('▶️ Resuming session...'); window.startSession(); }
+           if (paused) { paused = false; startSession(); }
         } else if (target === 'list') {
            document.getElementById('list-view').classList.add('active');
-           paused = true; window.clearTimer(); window.renderWordList();
+           paused = true; clearTimer(); renderWordList();
         } else if (target === 'log') {
            document.getElementById('log-view').classList.add('active');
-           paused = true; window.clearTimer(); initLogSystem();
+           paused = true; clearTimer(); initLogSystem();
         }
         updateNavButtons();
       };
@@ -459,440 +482,151 @@
       }
 
       // ================= GLOBAL FUNCTIONS =================
-      window.updatePauseBtn = function() { 
-         var btn = document.getElementById('pause-btn');
-         if (btn) btn.textContent = paused ? '▶' : '⏸'; 
-      };
-      window.closeModal = function() { 
-         var m = document.getElementById('edit-modal'); 
-         if (m) m.classList.remove('active'); 
-         editingId = null; 
-      };
-      window.clearLog = function() { 
-         logContainer = document.getElementById('log-container');
-         if (!logContainer) return; 
-         logContainer.innerHTML = ''; logEntries = []; 
-         console.log('🗑 Log cleared'); 
-      };
-
-      window.toggleSettings = function() { 
-         var m = document.getElementById('settings-modal');
-         if (m) { m.classList.toggle('active'); updateStorageInfo(); } 
-      };
-      window.setFilter = function(f) { 
-         if (f) { 
-            currentFilter = f; 
-            document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.filter === f); }); 
-            window.renderWordList(); 
-         } 
-      };
-      
-      window.switchList = function(id) { 
-        console.log('🔀 Switching list to ID: ' + id); 
-        if (appData.lists[id]) { 
-          appData.currentListId = id; queueSave(); window.loadCurrentList(); window.recalculateSRS(); window.startSession(); 
-        } 
-      };
-      window.createNewList = function() { 
-        var name = prompt('List name:', 'List ' + appData.nextListId); if (!name) return; 
-        var id = String(appData.nextListId++); 
-        appData.lists[id] = { id, name, words: [], settings: { wordTime: 4, transTime: 4, batchSize: 100, stickyLimit: 30 }, batch: [], nextWordId: 1 }; 
-        appData.currentListId = id; queueSave(); window.renderListSelector(); window.loadCurrentList(); window.recalculateSRS(); window.startSession(); 
-        window.toast('✅ Created'); 
-      };
-      window.deleteCurrentList = function() { 
-        var list = appData.lists[appData.currentListId]; if (!confirm('Delete "' + list.name + '"?')) return; 
-        delete appData.lists[appData.currentListId]; 
-        var rem = Object.keys(appData.lists); appData.currentListId = rem.length ? rem[0] : null; 
-        if (!appData.currentListId) window.createDefaultList(); 
-        queueSave(); window.renderListSelector(); window.loadCurrentList(); window.recalculateSRS(); window.startSession(); 
-        window.toast('🗑 Deleted'); 
-      };
-      window.applySettings = function() { 
-        settings.wordTime = window.clamp(1, 60, parseInt(document.getElementById('set-word-time').value) || 4); 
-        settings.transTime = window.clamp(1, 60, parseInt(document.getElementById('set-trans-time').value) || 4); 
-        settings.batchSize = window.clamp(1, 1000, parseInt(document.getElementById('set-batch-size').value) || 100); 
-        settings.stickyLimit = window.clamp(0, 10000, parseInt(document.getElementById('set-sticky-limit').value) || 30); 
-        queueSave(); window.recalculateSRS(); window.toggleSettings(); window.toast('✅ Applied'); window.startSession(); 
-      };
-      window.resetBatch = function() { 
-        words.forEach(function(w) { if (w.status === STATUS_NEW) { w.status = STATUS_POSTPONED; w.level = 0; } }); 
-        currentBatchIds = []; queueSave(); window.recalculateSRS(); window.toggleSettings(); window.toast('🔄 Reset'); window.startSession(); 
-      };
-      window.clearAll = function() { if (!confirm('Delete ALL?')) return; appData = { lists: {}, currentListId: null, nextListId: 1 }; window.saveData(); window.loadAll(); window.toast('🗑 Cleared'); };
-      window.prevCard = function() { window.clearTimer(); queueIndex = Math.max(0, queueIndex - 1); window.showCurrentCard(); };
-      window.nextCard = function() { window.clearTimer(); window.advance(); };
-      window.togglePause = function() { 
-        paused = !paused; window.updatePauseBtn(); 
-        if (!paused && phase !== 'idle') { 
-          var r = phaseDuration - (Date.now() - phaseStart); 
-          var n = phase === 'word' ? window.showTranslation : window.advance; 
-          if (r <= 10) n(); else window.startPhase(r, n); 
-        } else window.clearTimer(); 
-      };
+      window.updatePauseBtn = function() { var b=document.getElementById('pause-btn'); if(b) b.textContent=paused?'▶':'⏸'; };
+      window.closeModal = function() { var m=document.getElementById('edit-modal'); if(m) m.classList.remove('active'); editingId=null; };
+      window.clearLog = function() { logContainer=document.getElementById('log-container'); if(!logContainer)return; logContainer.innerHTML=''; logEntries=[]; console.log('🗑 Log cleared'); };
+      window.toggleSettings = function() { var m=document.getElementById('settings-modal'); if(m){m.classList.toggle('active'); updateStorageInfo();} };
+      window.setFilter = function(f) { if(f){currentFilter=f; document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===f)); renderWordList();} };
+      window.switchList = function(id) { if(appData.lists[id]){appData.currentListId=id; queueSave(); loadCurrentList(); recalculateSRS(); startSession();} };
+      window.createNewList = function() { var n=prompt('List name:','List '+appData.nextListId); if(!n)return; var id=String(appData.nextListId++); appData.lists[id]={id,name:n,words:[],settings:{wordTime:4,transTime:4,batchSize:100,stickyLimit:30},batch:[],nextWordId:1}; appData.currentListId=id; queueSave(); renderListSelector(); loadCurrentList(); recalculateSRS(); startSession(); window.toast('✅ Created'); };
+      window.deleteCurrentList = function() { var l=appData.lists[appData.currentListId]; if(!confirm('Delete "'+l.name+'"?'))return; delete appData.lists[appData.currentListId]; var r=Object.keys(appData.lists); appData.currentListId=r.length?r[0]:null; if(!appData.currentListId) createDefaultList(); queueSave(); renderListSelector(); loadCurrentList(); recalculateSRS(); startSession(); window.toast('🗑 Deleted'); };
+      window.applySettings = function() { settings.wordTime=clamp(1,60,parseInt(document.getElementById('set-word-time').value)||4); settings.transTime=clamp(1,60,parseInt(document.getElementById('set-trans-time').value)||4); settings.batchSize=clamp(1,1000,parseInt(document.getElementById('set-batch-size').value)||100); settings.stickyLimit=clamp(0,10000,parseInt(document.getElementById('set-sticky-limit').value)||30); queueSave(); recalculateSRS(); toggleSettings(); window.toast('✅ Applied'); startSession(); };
+      window.resetBatch = function() { words.forEach(w=>{if(w.status===STATUS_NEW){w.status=STATUS_POSTPONED;w.level=0;}}); currentBatchIds=[]; queueSave(); recalculateSRS(); toggleSettings(); window.toast('🔄 Reset'); startSession(); };
+      window.clearAll = function() { if(!confirm('Delete ALL?'))return; appData={lists:{},currentListId:null,nextListId:1}; saveData(); loadData(); window.toast('🗑 Cleared'); };
+      window.prevCard = function() { clearTimer(); queueIndex=Math.max(0,queueIndex-1); showCurrentCard(); };
+      window.nextCard = function() { clearTimer(); advance(); };
+      window.togglePause = function() { paused=!paused; updatePauseBtn(); if(!paused && phase!=='idle'){var r=phaseDuration-(Date.now()-phaseStart), n=phase==='word'?showTranslation:advance; r<=10?n():startPhase(r,n);} else clearTimer(); };
 
       window.addWord = function() { 
-        var w = document.getElementById('input-word').value.trim();
-        var p = document.getElementById('input-pron').value.trim();
-        var t = document.getElementById('input-trans').value.trim();
-        var u = document.getElementById('input-usage').value.trim();
-        if (!w || !t) return window.toast('❌ Word & translation'); 
-        var id = String(appData.lists[appData.currentListId].nextWordId++); 
-        words.push({ id, word: w, pronunciation: p, translation: t, usage: u, status: STATUS_POSTPONED, counter: 0, level: 0, lastRevision: Date.now(), revisionViewsCount: 0, flipSide: false }); 
-        queueSave(); window.recalculateSRS(); 
-        if (currentView === 'list') window.renderWordList();
-        window.toast('✅ Added'); 
+        var w=document.getElementById('input-word').value.trim(), p=document.getElementById('input-pron').value.trim(), t=document.getElementById('input-trans').value.trim(), u=document.getElementById('input-usage').value.trim();
+        if(!w||!t)return window.toast('❌ Word & translation'); 
+        var id=String(appData.lists[appData.currentListId].nextWordId++); 
+        words.push({id,word:w,pronunciation:p,translation:t,usage:u,status:STATUS_POSTPONED,counter:0,level:0,lastRevision:Date.now(),revisionViewsCount:0,flipSide:false}); 
+        queueSave(); recalculateSRS(); if(currentView==='list') renderWordList(); window.toast('✅ Added'); 
       };
       
       window.quickImport = function() { 
-        var raw = document.getElementById('quick-import-area').value.trim();
-        if (!raw) return window.toast('❌ Paste word///translation'); 
-        var parts = raw.split('///').map(function(s) { return s.trim(); }).filter(Boolean); 
-        if (parts.length % 2 !== 0) return window.toast('❌ Odd count'); 
-        var added = 0, list = appData.lists[appData.currentListId]; 
-        for (var i=0; i<parts.length; i+=2) { 
-          if (parts[i] && parts[i+1] && !words.some(function(x) { return x.word.toLowerCase() === parts[i].toLowerCase(); })) { 
-            words.push({ id: String(list.nextWordId++), word: parts[i], pronunciation: '', translation: parts[i+1], usage: '', status: STATUS_POSTPONED, counter: 0, level: 0, lastRevision: Date.now(), revisionViewsCount: 0, flipSide: false }); 
-            added++; 
-          } 
-        } 
-        if (added) { 
-            queueSave(); window.recalculateSRS(); 
-            if (currentView === 'list') window.renderWordList(); 
-            window.toast('✅ Imported ' + added); 
-        } else {
-            window.toast('⚠️ None');
-        }
+        var raw=document.getElementById('quick-import-area').value.trim(); if(!raw)return window.toast('❌ Paste word///translation'); 
+        var parts=raw.split('///').map(s=>s.trim()).filter(Boolean); if(parts.length%2!==0)return window.toast('❌ Odd count'); 
+        var added=0, list=appData.lists[appData.currentListId]; 
+        for(var i=0;i<parts.length;i+=2){if(parts[i]&&parts[i+1]&&!words.some(x=>x.word.toLowerCase()===parts[i].toLowerCase())){words.push({id:String(list.nextWordId++),word:parts[i],pronunciation:'',translation:parts[i+1],usage:'',status:STATUS_POSTPONED,counter:0,level:0,lastRevision:Date.now(),revisionViewsCount:0,flipSide:false});added++;}} 
+        if(added){queueSave();recalculateSRS();if(currentView==='list')renderWordList();window.toast('✅ Imported '+added);} else window.toast('⚠️ None');
       };
 
       window.importJSON = function(inp) { 
-        var f = inp.files[0]; if (!f) return; 
-        var r = new FileReader(); 
-        r.onload = function(e) { 
+        var f=inp.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(e){ 
           try { 
-            var d = JSON.parse(e.target.result); 
-            if (!Array.isArray(d)) throw new Error('Invalid format');
-            
-            var totalAdded = 0;
-            var isMultiList = d.length > 0 && d[0]._id && d[0].listName;
-
-            if (isMultiList) {
-               d.forEach(function(listObj) {
-                  var listName = listObj.listName || 'Imported List';
-                  var listId = listObj._id || 'imp_' + Date.now() + '_' + Math.random().toString(36).substr(2,9);
-                  
-                  var targetList = null;
-                  Object.keys(appData.lists).forEach(function(k) {
-                     if (appData.lists[k].name === listName || appData.lists[k].id === listId) targetList = appData.lists[k];
-                  });
-
-                  if (!targetList) {
-                     targetList = { id: listId, name: listName, words: [], settings: { wordTime: 4, transTime: 4, batchSize: 100, stickyLimit: 30 }, batch: [], nextWordId: 1 };
-                     appData.lists[listId] = targetList;
-                     appData.currentListId = listId;
-                  }
-
-                  Object.keys(listObj).forEach(function(key) {
-                     if (key.indexOf('_wordEntry') !== -1) {
-                        var entry = listObj[key];
-                        if (entry && entry.word) {
-                           var wArr = Array.isArray(entry.word) ? entry.word.map(x => (x == null) ? '' : String(x).trim()) : [(entry.word == null) ? '' : String(entry.word).trim()];
-                           var word = wArr[0]; if (!word) return;
-                           var translation = wArr[1] || '';
-                           var pronunciation = '', usage = '';
-                           for (var i = 2; i < wArr.length; i++) {
-                              if (typeof wArr[i] === 'object' && wArr[i] !== null && wArr[i].usage) usage = wArr[i].usage;
-                              else if (typeof wArr[i] === 'string' && wArr[i].length > 0 && !pronunciation) pronunciation = wArr[i];
-                           }
-                           if (targetList.words.some(w => w.word.toLowerCase() === word.toLowerCase())) return;
-
-                           targetList.words.push({
-                              id: entry.entryKey || String(targetList.nextWordId++), word, pronunciation, translation, usage,
-                              status: (String(entry.direction).trim() === '1') ? STATUS_REVISION : STATUS_POSTPONED,
-                              counter: parseInt(entry.counter) || 0, level: parseInt(entry.level) || 0,
-                              lastRevision: entry.lastRevision ? Date.parse(entry.lastRevision) : Date.now(),
-                              revisionViewsCount: 0, flipSide: false
-                           });
-                           totalAdded++;
-                        }
+            var d=JSON.parse(e.target.result); if(!Array.isArray(d))throw new Error('Invalid');
+            var total=0, isMulti=d.length>0&&d[0]._id&&d[0].listName;
+            if(isMulti){
+               d.forEach(lo=>{
+                  var ln=lo.listName||'Imported', lid=lo._id||'imp_'+Date.now();
+                  var tl=null; Object.keys(appData.lists).forEach(k=>{if(appData.lists[k].name===ln||appData.lists[k].id===lid)tl=appData.lists[k];});
+                  if(!tl){tl={id:lid,name:ln,words:[],settings:{wordTime:4,transTime:4,batchSize:100,stickyLimit:30},batch:[],nextWordId:1};appData.lists[lid]=tl;appData.currentListId=lid;}
+                  Object.keys(lo).forEach(key=>{
+                     if(key.indexOf('_wordEntry')!==-1){
+                        var ent=lo[key]; if(!ent||!ent.word)return;
+                        var wa=Array.isArray(ent.word)?ent.word.map(x=>(x==null)?'':String(x).trim()):[(ent.word==null)?'':String(ent.word).trim()];
+                        var wd=wa[0]; if(!wd)return; var tr=wa[1]||'', pr='', us='';
+                        for(var i=2;i<wa.length;i++){if(typeof wa[i]==='object'&&wa[i]!==null&&wa[i].usage)us=wa[i].usage;else if(typeof wa[i]==='string'&&wa[i].length>0&&!pr)pr=wa[i];}
+                        if(tl.words.some(w=>w.word.toLowerCase()===wd.toLowerCase()))return;
+                        tl.words.push({id:ent.entryKey||String(tl.nextWordId++),word:wd,pronunciation:pr,translation:tr,usage:us,status:(String(ent.direction).trim()==='1')?STATUS_REVISION:STATUS_POSTPONED,counter:parseInt(ent.counter)||0,level:parseInt(ent.level)||0,lastRevision:ent.lastRevision?Date.parse(ent.lastRevision):Date.now(),revisionViewsCount:0,flipSide:false});
+                        total++;
                      }
                   });
                });
-               queueSave(); window.loadCurrentList(); window.recalculateSRS(); window.startSession();
             } else {
-               var list = appData.lists[appData.currentListId];
-               d.forEach(function(it) {
-                  var wRaw = it.word;
-                  var wArr = Array.isArray(wRaw) ? wRaw.map(x => (x==null)?'':String(x).trim()) : [String(wRaw).trim()];
-                  var w = wArr[0]; if (!w) return;
-                  var t = (wArr[1]||'').trim(), p = '', u = '';
-                  for(var i=2; i<wArr.length; i++){
-                     if(typeof wArr[i]==='object' && wArr[i]!==null && wArr[i].usage) u = wArr[i].usage;
-                     else if(typeof wArr[i]==='string' && wArr[i].length>0 && !p) p = wArr[i];
-                  }
-                  if (words.some(x => x.word.toLowerCase()===w.toLowerCase())) return;
-                  words.push({ id:String(list.nextWordId++), word:w, pronunciation:p, translation:t, usage:u, status:(it.status===STATUS_REVISION)?STATUS_REVISION:STATUS_POSTPONED, counter:it.counter||0, level:it.level||0, lastRevision:it.lastRevision||Date.now(), revisionViewsCount:0, flipSide:false });
-                  totalAdded++;
+               var list=appData.lists[appData.currentListId];
+               d.forEach(it=>{
+                  var wr=it.word, wa=Array.isArray(wr)?wr.map(x=>(x==null)?'':String(x).trim()):[String(wr).trim()];
+                  var w=wa[0]; if(!w)return; var t=(wa[1]||'').trim(), p='', u='';
+                  for(var i=2;i<wa.length;i++){if(typeof wa[i]==='object'&&wa[i]!==null&&wa[i].usage)u=wa[i].usage;else if(typeof wa[i]==='string'&&wa[i].length>0&&!p)p=wa[i];}
+                  if(words.some(x=>x.word.toLowerCase()===w.toLowerCase()))return;
+                  words.push({id:String(list.nextWordId++),word:w,pronunciation:p,translation:t,usage:u,status:(it.status===STATUS_REVISION)?STATUS_REVISION:STATUS_POSTPONED,counter:it.counter||0,level:it.level||0,lastRevision:it.lastRevision||Date.now(),revisionViewsCount:0,flipSide:false});
+                  total++;
                });
-               queueSave(); window.recalculateSRS(); if(currentView==='list') window.renderWordList();
+               if(currentView==='list')renderWordList();
             }
-
-            if(totalAdded > 0) window.toast('✅ Imported ' + totalAdded + ' words');
-            else window.toast('⚠️ No new words');
-          } catch(x) { window.toast('❌ Invalid JSON'); console.error(x); } 
-        }; 
-        r.readAsText(f); inp.value=''; 
+            queueSave(); recalculateSRS(); startSession();
+            window.toast(total>0?'✅ Imported '+total+' words':'⚠️ No new words');
+          } catch(x){window.toast('❌ Invalid JSON');console.error(x);} 
+        }; r.readAsText(f); inp.value=''; 
       };
       
       window.exportData = function() { 
-        if (!storageAvailable && storageQuotaExceeded) {
-           window.toast('⚠️ Exporting in-memory data only');
-        }
-        var list = appData.lists[appData.currentListId], a = document.createElement('a'); 
-        a.href = URL.createObjectURL(new Blob([JSON.stringify(list.words, null, 2)], {type:'application/json'})); 
-        a.download = list.name.replace(/\s+/g, '_') + '.json'; a.click(); window.toast('📤 Exported'); 
+        var l=appData.lists[appData.currentListId], a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(l.words,null,2)],{type:'application/json'})); a.download=l.name.replace(/\s+/g,'_')+'.json'; a.click(); window.toast('📤 Exported'); 
       };
 
       function getTimeRemaining(w) {
-        if (!w.lastRevision || w.status === STATUS_REVISION || w.status === STATUS_NEW || w.status === STATUS_POSTPONED) return '';
-        var lvl = w.level || 0, delay = LEVELS[lvl];
-        if (!delay) return '';
-        var nextDue = parseInt(w.lastRevision) + delay, diff = nextDue - Date.now();
-        if (diff <= 0) return "⏰ Now";
-        var mins = Math.floor(diff / 60000);
-        if (mins < 60) return "⏰ " + mins + "m";
-        var hours = Math.floor(mins / 60);
-        if (hours < 24) return "⏰ " + hours + "h";
-        var days = Math.floor(hours / 24);
-        if (days < 30) return "⏰ " + days + "d";
-        return "⏰ " + Math.floor(days / 30) + "mo";
+        if(!w.lastRevision||[STATUS_NEW,STATUS_POSTPONED,STATUS_REVISION].includes(w.status))return '';
+        var lvl=w.level||0, delay=LEVELS[lvl]; if(!delay)return '';
+        var diff=(parseInt(w.lastRevision)+delay)-Date.now(); if(diff<=0)return '⏰ Now';
+        var m=Math.floor(diff/60000); if(m<60)return '⏰ '+m+'m'; var h=Math.floor(m/60); if(h<24)return '⏰ '+h+'h'; var d=Math.floor(h/24); if(d<30)return '⏰ '+d+'d'; return '⏰ '+Math.floor(d/30)+'mo';
       }
 
       window.renderWordList = function() { 
-        if (!words || !words.length) { document.getElementById('empty-list').style.display = 'block'; return; }
-        window.recalculateSRS(); 
-        var c = document.getElementById('word-list'); c.innerHTML = ''; 
-        var f = currentFilter === 'all' ? words : words.filter(w => w.status === currentFilter); 
-        if (!f.length) { document.getElementById('empty-list').style.display = 'block'; return; } 
-        document.getElementById('empty-list').style.display = 'none'; 
-        f.forEach(function(w) { 
-          var el = document.createElement('div'); el.className = 'word-item'; 
-          var ph = w.pronunciation ? '<div class="p">' + window.escHtml(w.pronunciation) + '</div>' : ''; 
-          var metaText = '👁 ' + (w.counter || 0) + ' | Lvl ' + (w.level||0);
-          var nextRev = getTimeRemaining(w); if (nextRev) metaText += ' | ' + nextRev;
-          el.innerHTML = '<div class="info"><div class="w">' + window.escHtml(w.word) + '</div>' + ph + '<div class="t">' + window.escHtml(w.translation || '[no translation]') + '</div><div class="meta">' + metaText + '</div></div><span class="status-tag ' + w.status + '">' + w.status + '</span><div class="actions"><button class="btn secondary" onclick="window.openEdit(\'' + w.id + '\')">✏️</button><button class="btn danger" onclick="window.deleteWord(\'' + w.id + '\')">🗑</button></div>'; 
-          c.appendChild(el); 
-        }); 
+        if(!words||!words.length){document.getElementById('empty-list').style.display='block';return;}
+        recalculateSRS(); var c=document.getElementById('word-list'); c.innerHTML=''; 
+        var f=currentFilter==='all'?words:words.filter(w=>w.status===currentFilter); 
+        if(!f.length){document.getElementById('empty-list').style.display='block';return;} document.getElementById('empty-list').style.display='none'; 
+        f.forEach(w=>{var el=document.createElement('div'); el.className='word-item'; var ph=w.pronunciation?'<div class="p">'+escHtml(w.pronunciation)+'</div>':''; var mt='👁 '+((w.counter||0)+' | Lvl '+(w.level||0)); var nr=getTimeRemaining(w); if(nr)mt+=' | '+nr; el.innerHTML='<div class="info"><div class="w">'+escHtml(w.word)+'</div>'+ph+'<div class="t">'+escHtml(w.translation||'[no trans]')+'</div><div class="meta">'+mt+'</div></div><span class="status-tag '+w.status+'">'+w.status+'</span><div class="actions"><button class="btn secondary" onclick="window.openEdit(\''+w.id+'\')">✏️</button><button class="btn danger" onclick="window.deleteWord(\''+w.id+'\')">🗑</button></div>'; c.appendChild(el);}); 
       };
 
-      window.openEdit = function(id) { 
-        editingId = id; var w = words.find(x => x.id === id); if (!w) return; 
-        document.getElementById('edit-word').value = w.word || ''; 
-        document.getElementById('edit-pron').value = w.pronunciation || ''; 
-        document.getElementById('edit-trans').value = w.translation || ''; 
-        document.getElementById('edit-usage').value = w.usage || ''; 
-        document.getElementById('edit-status').value = w.status || STATUS_POSTPONED; 
-        document.getElementById('edit-level').value = w.level || 0; 
-        document.getElementById('edit-counter').value = w.counter || 0; 
-        document.getElementById('edit-revision').value = w.lastRevision ? new Date(w.lastRevision).toLocaleString() : 'Never'; 
-        document.getElementById('edit-modal').classList.add('active'); 
-      };
-      window.saveEdit = function() { 
-        var w = words.find(x => x.id === editingId); if (!w) return window.closeModal(); 
-        w.word = document.getElementById('edit-word').value.trim() || w.word; 
-        w.pronunciation = document.getElementById('edit-pron').value.trim(); 
-        w.translation = document.getElementById('edit-trans').value.trim() || w.translation; 
-        w.usage = document.getElementById('edit-usage').value.trim();
-        var ns = document.getElementById('edit-status').value; 
-        if (ns !== w.status) { w.status = ns; if (ns === STATUS_NEW || ns === STATUS_POSTPONED) w.level = 0; }
-        queueSave(); window.recalculateSRS(); window.closeModal(); window.renderWordList(); window.startSession(); window.toast('✅ Saved'); 
-      };
-      window.deleteWord = function(id) { 
-        words = words.filter(w => w.id !== id); currentBatchIds = currentBatchIds.filter(b => b !== id); 
-        queueSave(); window.recalculateSRS(); if(currentView==='list') window.renderWordList(); window.startSession(); window.toast('🗑 Deleted'); 
-      };
+      window.openEdit = function(id) { editingId=id; var w=words.find(x=>x.id===id); if(!w)return; document.getElementById('edit-word').value=w.word||''; document.getElementById('edit-pron').value=w.pronunciation||''; document.getElementById('edit-trans').value=w.translation||''; document.getElementById('edit-usage').value=w.usage||''; document.getElementById('edit-status').value=w.status||STATUS_POSTPONED; document.getElementById('edit-level').value=w.level||0; document.getElementById('edit-counter').value=w.counter||0; document.getElementById('edit-revision').value=w.lastRevision?new Date(w.lastRevision).toLocaleString():'Never'; document.getElementById('edit-modal').classList.add('active'); };
+      window.saveEdit = function() { var w=words.find(x=>x.id===editingId); if(!w)return window.closeModal(); w.word=document.getElementById('edit-word').value.trim()||w.word; w.pronunciation=document.getElementById('edit-pron').value.trim(); w.translation=document.getElementById('edit-trans').value.trim()||w.translation; w.usage=document.getElementById('edit-usage').value.trim(); var ns=document.getElementById('edit-status').value; if(ns!==w.status){w.status=ns;if(ns===STATUS_NEW||ns===STATUS_POSTPONED)w.level=0;} queueSave(); recalculateSRS(); closeModal(); renderWordList(); startSession(); window.toast('✅ Saved'); };
+      window.deleteWord = function(id) { words=words.filter(w=>w.id!==id); currentBatchIds=currentBatchIds.filter(b=>b!==id); queueSave(); recalculateSRS(); if(currentView==='list')renderWordList(); startSession(); window.toast('🗑 Deleted'); };
 
-      function isDueForReview(w) {
-        if (!w.lastRevision) return true;
-        var lvl = Math.max(0, Math.min(24, parseInt(w.level) || 0));
-        return (Date.now() - parseInt(w.lastRevision)) >= LEVELS[lvl];
-      }
-
+      function isDueForReview(w) { return !w.lastRevision||(Date.now()-parseInt(w.lastRevision))>=LEVELS[Math.max(0,Math.min(24,w.level||0))]; }
       window.recalculateSRS = function() {
-        var changed = false;
-        words.forEach(function(w) {
-          if (w.status === STATUS_REVISION || w.status === STATUS_LEARNED) {
-            if (isDueForReview(w)) {
-              if (w.status !== STATUS_REVISION) { w.status = STATUS_REVISION; changed = true; w.revisionViewsCount = 0; w.flipSide = false; }
-            } else { if (w.status !== STATUS_LEARNED) { w.status = STATUS_LEARNED; changed = true; } }
-          }
-        });
-        if (changed) queueSave();
-        repeatBtn = document.querySelector('[data-mode="repeating"]');
-        if (repeatBtn) repeatBtn.classList.toggle('repeat-active', words.some(w => w.status === STATUS_REVISION));
+        var ch=false; words.forEach(w=>{if([STATUS_REVISION,STATUS_LEARNED].includes(w.status)){if(isDueForReview(w)){if(w.status!==STATUS_REVISION){w.status=STATUS_REVISION;ch=true;w.revisionViewsCount=0;w.flipSide=false;}}else{if(w.status!==STATUS_LEARNED){w.status=STATUS_LEARNED;ch=true;}}}});
+        if(ch)queueSave(); repeatBtn=document.querySelector('[data-mode="repeating"]'); if(repeatBtn)repeatBtn.classList.toggle('repeat-active',words.some(w=>w.status===STATUS_REVISION));
       };
 
-      function createDefaultList() { 
-        var id = String(appData.nextListId++); 
-        var defaultWords = TEST_WORDS.map(t => ({ id: String(appData.lists[id]?.words?.length || 1), word: t.word, pronunciation: t.pronunciation, translation: t.translation, usage: t.usage || '', status: STATUS_POSTPONED, counter: 0, level: 0, lastRevision: Date.now(), revisionViewsCount: 0, flipSide: false }));
-        appData.lists[id] = { id, name: 'Default Test List', words: defaultWords, settings: { wordTime: 4, transTime: 4, batchSize: 100, stickyLimit: 30 }, batch: [], nextWordId: 11 }; 
-        appData.currentListId = id; queueSave(); 
-        console.log('✅ Created default list:', id);
+      function createDefaultList() { var id=String(appData.nextListId++); var dw=TEST_WORDS.map((t,i)=>({id:String(i+1),word:t.word,pronunciation:t.pronunciation,translation:t.translation,usage:t.usage||'',status:STATUS_POSTPONED,counter:0,level:0,lastRevision:Date.now(),revisionViewsCount:0,flipSide:false})); appData.lists[id]={id,name:'Default Test List',words:dw,settings:{wordTime:4,transTime:4,batchSize:100,stickyLimit:30},batch:[],nextWordId:11}; appData.currentListId=id; queueSave(); console.log('✅ Default list created'); }
+      function loadCurrentList() { var l=appData.lists[appData.currentListId]; if(!l)return; words=l.words||[]; settings=l.settings||{wordTime:4,transTime:4,batchSize:100,stickyLimit:30}; currentBatchIds=(l.batch||[]).map(String); document.getElementById('set-word-time').value=settings.wordTime; document.getElementById('set-trans-time').value=settings.transTime; document.getElementById('set-batch-size').value=settings.batchSize; document.getElementById('set-sticky-limit').value=settings.stickyLimit; words.forEach(w=>{w.id=String(w.id);if(![STATUS_NEW,STATUS_POSTPONED,STATUS_LEARNED,STATUS_REVISION].includes(w.status))w.status=STATUS_POSTPONED; w.level=parseInt(w.level)||0;w.lastRevision=w.lastRevision||Date.now();w.revisionViewsCount=parseInt(w.revisionViewsCount)||0;w.flipSide=!!w.flipSide;w.usage=w.usage||'';}); }
+      function renderListSelector() { var s=document.getElementById('list-select'); s.innerHTML=''; Object.keys(appData.lists).forEach(id=>{var l=appData.lists[id];var o=document.createElement('option');o.value=l.id;o.textContent=l.name;if(String(l.id)===String(appData.currentListId))o.selected=true;s.appendChild(o);}); }
+
+      function syncBatchStatuses() { 
+        var sl=settings.stickyLimit||30, nw=words.filter(w=>w.status===STATUS_NEW), pw=words.filter(w=>w.status===STATUS_POSTPONED), sN=[], nN=[];
+        nw.forEach(w=>((w.counter||0)<sl?sN:nN).push(w)); var sr=(a,b)=>(a.lastRevision||0)-(b.lastRevision||0); sN.sort(sr); nN.sort(sr); var so=sN.concat(nN), ids=[], c=0;
+        for(var i=0;i<so.length;i++){if(c>=settings.batchSize)break;ids.push(String(so[i].id));c++;}
+        if(c<settings.batchSize){pw.sort(sr);for(var j=0;j<pw.length;j++){if(c>=settings.batchSize)break;pw[j].status=STATUS_NEW;ids.push(String(pw[j].id));c++;}}
+        var set=new Set(ids); words.forEach(w=>{if(w.status===STATUS_NEW&&!set.has(String(w.id)))w.status=STATUS_POSTPONED;}); currentBatchIds=ids;
       }
 
-      window.loadCurrentList = function() { 
-        var list = appData.lists[appData.currentListId]; 
-        if (!list) { console.error('❌ Cannot load list:', appData.currentListId); return; }
-        words = list.words || []; settings = list.settings || { wordTime: 4, transTime: 4, batchSize: 100, stickyLimit: 30 }; 
-        currentBatchIds = (list.batch || []).map(String); 
-        document.getElementById('set-word-time').value = settings.wordTime; document.getElementById('set-trans-time').value = settings.transTime; 
-        document.getElementById('set-batch-size').value = settings.batchSize; document.getElementById('set-sticky-limit').value = settings.stickyLimit;
-        console.log(`💾 Loaded list: "${list.name}" | ${words.length} words | Batch: ${currentBatchIds.length}`);
-        
-        words.forEach(function(w) { 
-          w.id = String(w.id); if ([STATUS_NEW,STATUS_POSTPONED,STATUS_LEARNED,STATUS_REVISION].indexOf(w.status)===-1) w.status=STATUS_POSTPONED;
-          w.level=parseInt(w.level)||0; w.lastRevision=w.lastRevision||Date.now(); w.revisionViewsCount=parseInt(w.revisionViewsCount)||0; w.flipSide=!!w.flipSide; w.usage=w.usage||'';
-        }); 
-      };
-
-      window.renderListSelector = function() { 
-        var sel = document.getElementById('list-select'); sel.innerHTML = ''; 
-        Object.keys(appData.lists).forEach(id => { 
-           var list = appData.lists[id]; var opt = document.createElement('option'); 
-           opt.value = list.id; opt.textContent = list.name; 
-           if (String(list.id) === String(appData.currentListId)) opt.selected = true; 
-           sel.appendChild(opt); 
-        }); 
-      };
-
-      window.syncBatchStatuses = function() { 
-        var stickyLimit = settings.stickyLimit || 30;
-        var newWords = words.filter(w => w.status === STATUS_NEW);
-        var postponedWords = words.filter(w => w.status === STATUS_POSTPONED);
-        
-        var stickyNew=[], nonStickyNew=[];
-        newWords.forEach(w => ((w.counter||0) < stickyLimit ? stickyNew : nonStickyNew).push(w));
-        var sort = (a,b) => (a.lastRevision||0)-(b.lastRevision||0);
-        stickyNew.sort(sort); nonStickyNew.sort(sort);
-        var sorted = stickyNew.concat(nonStickyNew), ids=[], cnt=0;
-        for(var i=0; i<sorted.length; i++){ if(cnt>=settings.batchSize) break; ids.push(String(sorted[i].id)); cnt++; }
-        if(cnt < settings.batchSize){
-           postponedWords.sort(sort);
-           for(var j=0; j<postponedWords.length; j++){ if(cnt>=settings.batchSize) break; postponedWords[j].status=STATUS_NEW; ids.push(String(postponedWords[j].id)); cnt++; }
-        }
-        var set = new Set(ids);
-        words.forEach(w => { if(w.status===STATUS_NEW && !set.has(String(w.id))) w.status=STATUS_POSTPONED; });
-        currentBatchIds = ids;
-      };
-
-      window.startSession = function() { 
-        if (sessionRecursionGuard) return;
-        sessionRecursionGuard = true;
-        try {
-          window.switchView('card'); window.recalculateSRS(); 
-          paused = false; phase = 'idle'; window.clearTimer(); queueIndex = 0; window.updatePauseBtn();
-          if (mode === 'learning') { 
-            if (words.length === 0) { window.showEmptyCard('No words.'); return; }
-            window.syncBatchStatuses();
-            if (currentBatchIds.length === 0) { 
-               window.showEmptyCard(words.some(w=>w.status===STATUS_POSTPONED) ? 'Batch empty. Reset to refill.' : 'Add words.'); return; 
-            } 
-            queue = window.shuffleArray(currentBatchIds.map(id=>({id, flip:false, skip:false}))); 
-          } else { 
-            var due = words.filter(w => w.status === STATUS_REVISION && w.revisionViewsCount < 2);
-            if (due.length === 0) { window.showEmptyCard('✅ Caught up!'); return; } 
-            queue = window.shuffleArray(due.map(w=>({id:w.id, flip:w.flipSide, skip:false}))); 
-          } 
-          window.updateBadge(); window.showCurrentCard(); 
-        } finally { sessionRecursionGuard = false; }
-      };
-
-      window.showCurrentCard = function() { 
-        while (queueIndex < queue.length) { 
-          var e = queue[queueIndex]; if(e.skip){queueIndex++; continue;}
-          var item = words.find(w => String(w.id)===String(e.id)); if(!item){e.skip=true;queueIndex++;continue;}
-          window.displayWord(item, e.flip); return;
-        } 
-        if (queueIndex >= queue.length) window.startSession(); 
-      };
-
-      window.displayWord = function(item, isFlipped) { 
-        phase = 'word'; item.revisionViewsCount++; item.flipSide = !isFlipped; queueSave();
-        document.getElementById('c-pron').textContent = item.pronunciation || ''; 
-        document.getElementById('c-word').textContent = isFlipped ? item.translation : item.word; 
-        document.getElementById('c-trans').textContent = isFlipped ? item.word : item.translation;
-        document.getElementById('c-trans').classList.remove('visible'); 
-        document.getElementById('c-counter').textContent = 'Seen: ' + (item.counter || 0) + '×'; 
-        document.getElementById('c-revision').textContent = 'Last: ' + (item.lastRevision ? new Date(item.lastRevision).toLocaleString() : 'Never');
-        document.getElementById('c-level').textContent = 'Lvl: ' + (item.level || 0);
-        
-        if (mode === 'repeating' && item.revisionViewsCount >= 2) {
-          item.status = STATUS_LEARNED; item.level = Math.min((item.level||0)+1, 24); item.lastRevision = Date.now(); 
-          queueSave(); window.recalculateSRS(); queue.forEach(qE => String(qE.id)===String(item.id) && (qE.skip=true));
-        }
-        item.counter = (item.counter||0)+1; window.updateBadge(); 
-        window.startPhase(settings.wordTime*1000, window.showTranslation); 
-      };
-
-      window.showTranslation = function() { 
-        phase = 'trans'; 
-        var pron = document.getElementById('c-pron');
-        if(pron){ var it=words.find(w=>String(w.id)===String(queue[queueIndex]?.id)); pron.textContent=it?(it.pronunciation||''):''; }
-        document.getElementById('c-trans').classList.add('visible'); window.startPhase(settings.transTime*1000, window.advance); 
-      };
-      window.advance = function() { queueIndex++; if(queueIndex>=queue.length)window.startSession(); else window.showCurrentCard(); };
-      window.startPhase = function(ms, cb) { phaseStart=Date.now(); phaseDuration=ms; timerId=setTimeout(()=>{if(!paused)cb()},ms); };
-      window.clearTimer = function() { clearTimeout(timerId); timerId=null; };
-      window.updateBadge = function() { 
-        var b=document.getElementById('q-badge'); if(!b)return;
-        b.textContent = mode==='learning' ? queue.filter(e=>!e.skip).length+' / '+currentBatchIds.length : new Set(queue.filter(e=>!e.skip).map(e=>e.id)).size+' words';
-      };
-      window.showEmptyCard = function(msg) { 
-        var w=document.getElementById('c-word'); if(!w)return; w.textContent='📭'; document.getElementById('c-pron').textContent=''; 
-        var t=document.getElementById('c-trans'); if(t){t.textContent=msg; t.classList.remove('visible');} 
-        document.getElementById('c-counter').textContent=''; document.getElementById('c-revision').textContent='Last: Never'; 
-        document.getElementById('c-level').textContent='Lvl: 0'; document.getElementById('q-badge').textContent='0'; document.getElementById('status').textContent=''; 
-      };
-      window.clamp = (a,b,v)=>Math.min(b,Math.max(a,v||a));
-      window.escHtml = s=>{var d=document.createElement('div');d.textContent=s||'';return d.innerHTML};
-      window.shuffleArray = arr=>{var a=[...arr];for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a};
+      function startSession() { 
+        if(sessionRecursionGuard)return; sessionRecursionGuard=true;
+        try { switchView('card'); recalculateSRS(); paused=false;phase='idle';clearTimer();queueIndex=0;updatePauseBtn();
+          if(mode==='learning'){if(!words.length){showEmptyCard('No words.');return;}syncBatchStatuses();if(!currentBatchIds.length){showEmptyCard(words.some(w=>w.status===STATUS_POSTPONED)?'Batch empty. Reset to refill.':'Add words.');return;}queue=shuffleArray(currentBatchIds.map(id=>({id,flip:false,skip:false})));}
+          else{var d=words.filter(w=>w.status===STATUS_REVISION&&w.revisionViewsCount<2);if(!d.length){showEmptyCard('✅ Caught up!');return;}queue=shuffleArray(d.map(w=>({id:w.id,flip:w.flipSide,skip:false})));}
+          updateBadge(); showCurrentCard(); 
+        } finally{sessionRecursionGuard=false;}
+      }
+      function showCurrentCard(){while(queueIndex<queue.length){var e=queue[queueIndex];if(e.skip){queueIndex++;continue;}var it=words.find(w=>String(w.id)===String(e.id));if(!it){e.skip=true;queueIndex++;continue;}displayWord(it,e.flip);return;}if(queueIndex>=queue.length)startSession();}
+      function displayWord(it,fl){phase='word';it.revisionViewsCount++;it.flipSide=!fl;queueSave();document.getElementById('c-pron').textContent=it.pronunciation||'';document.getElementById('c-word').textContent=fl?it.translation:it.word;document.getElementById('c-trans').textContent=fl?it.word:it.translation;document.getElementById('c-trans').classList.remove('visible');document.getElementById('c-counter').textContent='Seen: '+((it.counter||0)+'×');document.getElementById('c-revision').textContent='Last: '+((it.lastRevision?new Date(it.lastRevision).toLocaleString():'Never'));document.getElementById('c-level').textContent='Lvl: '+(it.level||0);if(mode==='repeating'&&it.revisionViewsCount>=2){it.status=STATUS_LEARNED;it.level=Math.min((it.level||0)+1,24);it.lastRevision=Date.now();queueSave();recalculateSRS();queue.forEach(q=>String(q.id)===String(it.id)&&(q.skip=true));}it.counter=(it.counter||0)+1;updateBadge();startPhase(settings.wordTime*1000,showTranslation);}
+      function showTranslation(){phase='trans';var pr=document.getElementById('c-pron');if(pr){var it=words.find(w=>String(w.id)===String(queue[queueIndex]?.id));pr.textContent=it?(it.pronunciation||''):'';}document.getElementById('c-trans').classList.add('visible');startPhase(settings.transTime*1000,advance);}
+      function advance(){queueIndex++;if(queueIndex>=queue.length)startSession();else showCurrentCard();}
+      function startPhase(ms,cb){phaseStart=Date.now();phaseDuration=ms;timerId=setTimeout(()=>{if(!paused)cb()},ms);}
+      function clearTimer(){clearTimeout(timerId);timerId=null;}
+      function updateBadge(){var b=document.getElementById('q-badge');if(!b)return;b.textContent=mode==='learning'?queue.filter(e=>!e.skip).length+' / '+currentBatchIds.length:new Set(queue.filter(e=>!e.skip).map(e=>e.id)).size+' words';}
+      function showEmptyCard(m){var w=document.getElementById('c-word');if(!w)return;w.textContent='📭';document.getElementById('c-pron').textContent='';var t=document.getElementById('c-trans');if(t){t.textContent=m;t.classList.remove('visible');}document.getElementById('c-counter').textContent='';document.getElementById('c-revision').textContent='Last: Never';document.getElementById('c-level').textContent='Lvl: 0';document.getElementById('q-badge').textContent='0';document.getElementById('status').textContent='';}
+      var clamp=(a,b,v)=>Math.min(b,Math.max(a,v||a)), escHtml=s=>{var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}, shuffleArray=arr=>{var a=[...arr];for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a};
       window.toast = m=>{var s=document.getElementById('status');if(s){s.textContent=m;setTimeout(()=>{if(s.textContent===m)s.textContent=''},2000);}};
 
-      // INIT
-      window.loadAll = function() {
-        try {
-          var raw = localStorage.getItem(KEY_DATA); var d = raw ? JSON.parse(raw) : null;
-          if(d) { appData = d; appData.nextListId = parseInt(appData.nextListId)||1; }
-        } catch(e) { console.error('❌ Load failed:', e); appData={lists:{},currentListId:null,nextListId:1}; }
-        
-        if(!appData.currentListId || !appData.lists[appData.currentListId]) window.createDefaultList();
-        window.renderListSelector(); window.loadCurrentList(); window.recalculateSRS(); window.startSession();
-        updateStorageInfo();
-      };
-
       function initApp() {
-        if(!('localStorage' in window)) storageAvailable = false;
-        ['btn-list','btn-log'].forEach(id=>{var b=document.getElementById(id); if(b)b.addEventListener('click',()=>window.switchView(id==='btn-list'?'list':'log'));});
-        document.getElementById('btn-learn').addEventListener('click', ()=>{mode='learning';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));window.startSession();});
-        document.getElementById('btn-repeat').addEventListener('click', ()=>{mode='repeating';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));window.startSession();});
-        document.getElementById('btn-settings').addEventListener('click', window.toggleSettings);
-
-        var card = document.getElementById('main-card');
-        if(card) card.addEventListener('click', e=>{
-           if(queue.length===0)return; var sel=window.getSelection(); if(sel?.type==='Range'&&sel.toString().trim().length>0)return;
-           var entry=queue[queueIndex]; if(!entry||entry.skip)return; var item=words.find(w=>String(w.id)===String(entry.id)); if(!item)return;
-           if(mode==='learning'){ item.status=STATUS_REVISION;item.level=1;item.lastRevision=Date.now();item.revisionViewsCount=0;item.flipSide=false; currentBatchIds=currentBatchIds.filter(id=>String(id)!==String(item.id)); queueSave();window.recalculateSRS();window.toast('✅ Revision'); }
-           else { item.status=STATUS_NEW;item.level=0;item.lastRevision=Date.now();item.revisionViewsCount=0;item.flipSide=false; queueSave();window.recalculateSRS();window.toast('🔄 Learn'); }
-           window.clearTimer();window.advance();
-        });
-
-        document.getElementById('edit-modal').addEventListener('click',e=>{if(e.target.id==='edit-modal')window.closeModal();});
-        document.getElementById('settings-modal').addEventListener('click',e=>{if(e.target.id==='settings-modal')window.toggleSettings();});
-        srsTimerId = setInterval(window.recalculateSRS, 60000);
-        window.loadAll();
+        if(typeof indexedDB === 'undefined') { console.warn('⚠️ IndexedDB not supported'); document.getElementById('loading-overlay').innerHTML='<div style="color:var(--danger)">Storage not supported on this browser.</div>'; return; }
+        ['btn-list','btn-log'].forEach(id=>{var b=document.getElementById(id);if(b)b.addEventListener('click',()=>switchView(id==='btn-list'?'list':'log'));});
+        document.getElementById('btn-learn').addEventListener('click',()=>{mode='learning';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));startSession();});
+        document.getElementById('btn-repeat').addEventListener('click',()=>{mode='repeating';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));startSession();});
+        document.getElementById('btn-settings').addEventListener('click',toggleSettings);
+        var card=document.getElementById('main-card');
+        if(card)card.addEventListener('click',e=>{if(!queue.length)return;var s=window.getSelection();if(s?.type==='Range'&&s.toString().trim().length>0)return;var en=queue[queueIndex];if(!en||en.skip)return;var it=words.find(w=>String(w.id)===String(en.id));if(!it)return;if(mode==='learning'){it.status=STATUS_REVISION;it.level=1;it.lastRevision=Date.now();it.revisionViewsCount=0;it.flipSide=false;currentBatchIds=currentBatchIds.filter(id=>String(id)!==String(it.id));queueSave();recalculateSRS();window.toast('✅ Revision');}else{it.status=STATUS_NEW;it.level=0;it.lastRevision=Date.now();it.revisionViewsCount=0;it.flipSide=false;queueSave();recalculateSRS();window.toast('🔄 Learn');}clearTimer();advance();});
+        document.getElementById('edit-modal').addEventListener('click',e=>{if(e.target.id==='edit-modal')closeModal();});
+        document.getElementById('settings-modal').addEventListener('click',e=>{if(e.target.id==='settings-modal')toggleSettings();});
+        srsTimerId=setInterval(recalculateSRS,60000);
+        loadData();
       }
-
-      if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initApp); else initApp();
+      if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initApp);else initApp();
     })();
   </script>
 </body>
