@@ -14,7 +14,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1rem; }
     
-    header { width: 100%; max-width: 420px; margin-bottom: 1rem; text-align: center; }
+    header { width: 100%; max-width: 420px; margin-bottom: 1rem; text-align: center; z-index: 10; position: relative; }
     h1 { font-size: 1.2rem; color: var(--muted); margin-bottom: 0.3rem; }
     .version { font-size: 0.7rem; color: var(--muted); opacity: 0.7; margin-bottom: 0.5rem; display: inline-block; background: var(--card); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); }
     
@@ -30,9 +30,15 @@
     .nav-btn.log-btn.active { background: var(--warning); color: #000; }
     .nav-btn.repeat-active { background: var(--pink) !important; color: #fff !important; box-shadow: 0 0 8px rgba(219, 39, 119, 0.5); }
 
-    #card-view { width: 100%; max-width: 420px; margin: 0 auto; display: block; }
+    /* View Sections - Default hidden via CSS to prevent stacking glitches */
+    #card-view, #list-view, #log-view { 
+        width: 100%; max-width: 420px; display: none; 
+    }
+    /* Show card view by default */
+    #card-view.active { display: block; }
+
     .card-section { width: 100%; display: flex; flex-direction: column; align-items: center; margin: 0 auto 1.5rem; }
-    .card-wrap { width: 100%; margin-bottom: 1rem; }
+    .card-wrap { width: 100%; margin-bottom: 1rem; position: relative; }
     
     .flashcard { 
       width: 100%; min-height: 280px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); 
@@ -47,7 +53,7 @@
       -webkit-font-smoothing: antialiased; word-break: break-word; overflow-wrap: break-word;
     }
     .flashcard .pron { 
-      font-size: 1.5rem; color: var(--primary); font-weight: 500; margin-bottom: 0.5rem; min-height: 2rem; 
+      font-size: 1.2rem; color: var(--primary); font-weight: 500; margin-bottom: 0.5rem; min-height: 1.5rem; 
       font-family: ui-monospace, monospace; word-break: break-word; overflow-wrap: break-word;
     }
     .flashcard .trans { 
@@ -56,15 +62,16 @@
     }
     .flashcard .trans.visible { opacity: 1; transform: translateY(0); }
     .flashcard .badge { position: absolute; top: 0.6rem; right: 0.6rem; font-size: 0.7rem; background: var(--bg); color: var(--muted); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); }
-    .flashcard .hint { font-size: 0.75rem; color: var(--muted); opacity: 0.7; margin-top: 0.5rem; }
+    
     .flashcard .meta-row { font-size: 0.7rem; color: var(--muted); margin-top: 0.5rem; display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; }
 
-    .controls { width: 100%; display: flex; gap: 0.3rem; justify-content: center; margin-bottom: 0.8rem; }
+    .controls { width: 100%; display: flex; gap: 0.3rem; justify-content: center; margin-bottom: 0.8rem; flex-wrap: wrap; }
     .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: 0.15s; background: var(--primary); color: #fff; user-select: none; font-size: 0.85rem; }
     .btn:active { opacity: 0.9; }
     .btn.secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
     .btn.danger { background: var(--danger); }
     .btn.success { background: var(--success); }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
     
     .status-msg { text-align: center; min-height: 1.2rem; color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
 
@@ -72,15 +79,12 @@
     .filter-btn { padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--card); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; }
     .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
     
-    .list-view { width: 100%; max-width: 560px; display: none; }
-    .list-view.active { display: block; }
-    
-    .view-header { display: flex; justify-content: center; margin-bottom: 0.6rem; }
-    .view-header h3 { 
+    .list-view-header { display: flex; justify-content: center; margin-bottom: 0.6rem; }
+    .list-view-header h3 { 
         cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0.5rem 1rem; 
         border-bottom: 2px solid transparent; transition: 0.2s;
     }
-    .view-header h3:hover { color: var(--primary); border-color: var(--primary); }
+    .list-view-header h3:hover { color: var(--primary); border-color: var(--primary); }
     
     .word-list { display: grid; gap: 0.4rem; max-height: 50vh; overflow-y: auto; padding-right: 0.3rem; }
     .word-item { display: flex; align-items: flex-start; gap: 0.6rem; background: var(--card); padding: 0.9rem; border-radius: 8px; border: 1px solid var(--border); }
@@ -136,6 +140,16 @@
     .quick-import small { display: block; color: var(--muted); margin-bottom: 0.4rem; font-size: 0.8rem; }
     .quick-import .warn { color: var(--warning); font-size: 0.75rem; display: block; margin-top: 0.2rem; }
 
+    /* Usage Overlay */
+    #usage-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: var(--card); border-radius: var(--radius); padding: 1rem;
+      overflow-y: auto; z-index: 20; display: none; flex-direction: column; align-items: center;
+      opacity: 0; transition: opacity 0.2s ease;
+    }
+    #usage-overlay.visible { display: flex; opacity: 1; }
+    .usage-example { width: 100%; margin: 0.5rem 0; background: var(--bg); padding: 0.8rem; border-radius: 6px; border: 1px solid var(--border); text-align: left; white-space: pre-wrap; font-size: 1.5em; line-height: 1.5em; }
+
     #loading-overlay {
       position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column;
       align-items: center; justify-content: center; z-index: 1000; transition: opacity 0.3s;
@@ -158,7 +172,7 @@
 
   <header>
     <h1>📖 Word Learning</h1>
-    <div class="version">v1.9.1 (IndexedDB)</div>
+    <div class="version">v2.1.1</div>
     <div class="list-selector">
       <select id="list-select" onchange="window.switchList(this.value)"></select>
       <button class="btn secondary" onclick="window.createNewList()">+ New</button>
@@ -174,34 +188,41 @@
   </header>
 
   <main>
-    <section id="card-view" class="view-section">
+    <!-- Card View -->
+    <section id="card-view" class="view-section active">
       <div class="card-section">
         <div class="card-wrap">
           <div class="flashcard" id="main-card">
-            <div class="badge" id="q-badge">0/0</div>
+            <div class="badge" id="q-badge">0 / 0 / <span style="color:var(--pink)">0</span></div>
             <div class="word" id="c-word">---</div>
             <div class="pron" id="c-pron"></div>
             <div class="trans" id="c-trans">---</div>
             <div class="meta-row">
               <span id="c-level">Lvl: 0</span>
-              <span id="c-counter">Seen: 0×</span>
+              <span id="c-counter">Seen: 0</span>
               <span id="c-revision">Last: Never</span>
             </div>
-            <div class="hint">Tap to move · Select text freely</div>
+            <!-- Removed: Tap to move · Select text freely -->
+            
+            <div id="usage-overlay">
+              <div id="usage-content"></div>
+            </div>
           </div>
         </div>
         <div class="controls">
-          <button class="btn secondary" onclick="window.prevCard()">⏮</button>
-          <button class="btn secondary" id="pause-btn" onclick="window.togglePause()">⏸</button>
-          <button class="btn secondary" onclick="window.nextCard()">⏭</button>
+          <button class="btn secondary" id="btn-prev" onclick="window.prevCard()">⏮</button>
+          <button class="btn secondary" id="btn-pause" onclick="window.togglePause()">⏸</button>
+          <button class="btn secondary" id="btn-next" onclick="window.nextCard()">⏭</button>
+          <button class="btn secondary" onclick="window.toggleUsage()">📖 Usage</button>
         </div>
       </div>
       <div class="status-msg" id="status">Add words to begin</div>
     </section>
 
-    <section id="list-view" class="view-section list-view">
-      <div class="view-header">
-        <h3 onclick="window.switchView('card')">📚 Library</h3>
+    <!-- List View -->
+    <section id="list-view" class="view-section">
+      <div class="list-view-header">
+        <h3 onclick="window.switchView('card')">📚 Library (Tap to return to Cards)</h3>
       </div>
       <div class="filter-row">
         <button class="filter-btn active" data-filter="all" onclick="window.setFilter('all')">All</button>
@@ -214,14 +235,16 @@
       <div id="empty-list" style="text-align:center; padding:1.5rem; color:var(--muted); display:none; font-size:0.9rem;">No words yet.</div>
     </section>
 
-    <section id="log-view" class="view-section list-view">
-      <div class="view-header">
-        <h3 onclick="window.switchView('card')">📜 App Log</h3>
+    <!-- Log View -->
+    <section id="log-view" class="view-section">
+      <div class="list-view-header">
+        <h3 onclick="window.switchView('card')">📜 App Log (Tap to return to Cards)</h3>
       </div>
       <div id="log-container" class="log-container"></div>
       <button class="btn secondary" onclick="window.clearLog()" style="margin-top:0.5rem; width:100%;">🗑 Clear Log</button>
     </section>
 
+    <!-- Add Word Section -->
     <details class="add-section">
       <summary class="add-summary">➕ Add Word</summary>
       <div class="add-content">
@@ -345,9 +368,10 @@
       var appData = { lists: {}, currentListId: null, nextListId: 1 };
       var words = [], settings = { wordTime: 4, transTime: 4, batchSize: 100, stickyLimit: 30 }, mode = 'learning', currentFilter = 'all';
       var currentBatchIds = [], queue = [], queueIndex = 0;
-      var paused = false, phase = 'idle', phaseStart = 0, phaseDuration = 0, timerId = null, editingId = null;
+      var paused = true, phase = 'idle', phaseStart = 0, phaseDuration = 0, timerId = null, editingId = null;
+      var usageOpen = false; 
       var sessionRecursionGuard = false;
-      var logEntries = [];
+      var logEntries = []; // PERSISTENT LOG HISTORY
       var srsTimerId = null;
       var currentView = 'card'; 
       
@@ -413,65 +437,110 @@
         } else { el.textContent = '💾 IndexedDB: Active'; }
       }
 
-      // ================= LOGGING SYSTEM =================
-      var logBuffer = [];
-      function initLogSystem() {
-        logContainer = document.getElementById('log-container');
-        if (logContainer && logBuffer.length > 0) {
-           logBuffer.forEach(log => appendLogToUI(log.type, log.msg));
-           logBuffer = [];
-        }
+      // ================= PERSISTENT LOGGING SYSTEM =================
+      var logContainer = document.getElementById('log-container');
+      
+      function renderLogHistory() {
+        if (!logContainer) return;
+        logContainer.innerHTML = ''; // Clear DOM only, keep history array
+        logEntries.forEach(entry => appendLogEntryToDOM(entry));
       }
-      function appendLogToUI(type, msg) {
-         if (!logContainer) return;
-         var entry = document.createElement('div');
-         entry.className = 'log-entry ' + (type === 'error' ? 'error' : type === 'warn' ? 'warn' : type === 'info' ? 'info' : 'log');
-         entry.textContent = msg;
-         logContainer.appendChild(entry);
-         logContainer.scrollTop = logContainer.scrollHeight;
+
+      function appendLogEntryToDOM(entry) {
+        if (!logContainer) return;
+        var el = document.createElement('div');
+        el.className = 'log-entry ' + entry.type;
+        el.textContent = entry.msg;
+        logContainer.appendChild(el);
+        logContainer.scrollTop = logContainer.scrollHeight;
       }
+
+      // Global Logging Function - NEVER clears history
       function addLog(type, args) {
           var time = new Date().toLocaleTimeString();
-          var msg = Array.prototype.map.call(args, a => {
+          var msg = Array.prototype.map.call(args, function(a) {
             try { return (typeof a === 'object' && a !== null) ? JSON.stringify(a).substring(0, 150) : String(a); } catch(e) { return String(a); }
           }).join(' ');
           var fullMsg = `[${time}] ${msg}`;
-          logEntries.push({ time, type, msg });
-          if (logEntries.length > 600) logEntries.shift();
-          if (logContainer) appendLogToUI(type, fullMsg);
-          else { logBuffer.push({type, msg: fullMsg}); if (logBuffer.length > 100) logBuffer.shift(); }
+          
+          // 1. Save to persistent memory array
+          logEntries.push({ type: type, msg: fullMsg, time: time });
+          if (logEntries.length > 1000) logEntries.shift(); // Limit memory size
+          
+          // 2. If Log View is open, append to DOM immediately
+          var logView = document.getElementById('log-view');
+          if (logView && logView.style.display !== 'none') {
+              appendLogEntryToDOM({type: type, msg: fullMsg});
+          }
       }
+
+      // Override console methods
       console.log = (function(orig){return function(){addLog('log',arguments);orig.apply(console,arguments);}})(console.log);
       console.error = (function(orig){return function(){addLog('error',arguments);orig.apply(console,arguments);}})(console.error);
       console.warn = (function(orig){return function(){addLog('warn',arguments);orig.apply(console,arguments);}})(console.warn);
-      window.onerror = (m, u, l, c, e) => addLog('error', ['❌ Error: ' + m + ' (L:' + l + ')']);
-      window.addEventListener('unhandledrejection', e => addLog('error', ['❌ Promise rejected: ' + (e.reason || e)]));
-      console.log('📱 App initialized. IndexedDB active.');
+      
+      // Global Error Handlers
+      window.onerror = function(msg, url, line, col, err) { 
+          addLog('error', ['❌ Error: ' + msg + ' (L:' + line + ')']); 
+      };
+      window.addEventListener('unhandledrejection', function(e) { 
+          addLog('error', ['❌ Promise rejected: ' + (e.reason || e)]); 
+      });
 
-      // ================= VIEW STATE MACHINE =================
+      console.log('📱 App initialized. Persistent logging active.');
+
+      // ================= VIEW STATE MACHINE (FIXED) =================
       function hideAllViews() {
-        ['card-view','list-view','log-view'].forEach(id => {
-           var el = document.getElementById(id);
-           if(el) el.style.display = id==='card-view'?'none':'block';
-           if(id!=='card-view' && el) el.classList.remove('active');
-        });
+          // Force hide all sections using display: none to prevent stacking
+          var views = ['card-view', 'list-view', 'log-view'];
+          views.forEach(function(id) {
+              var el = document.getElementById(id);
+              if (el) {
+                  el.style.display = 'none';
+                  el.classList.remove('active');
+              }
+          });
       }
 
       window.switchView = function(target) {
-        if (currentView === target) return;
-        currentView = target;
-        hideAllViews();
-        if (target === 'card') {
-           document.getElementById('card-view').style.display = 'block';
-           if (paused) { paused = false; startSession(); }
-        } else if (target === 'list') {
-           document.getElementById('list-view').classList.add('active');
-           paused = true; clearTimer(); renderWordList();
-        } else if (target === 'log') {
-           document.getElementById('log-view').classList.add('active');
-           paused = true; clearTimer(); initLogSystem();
-        }
-        updateNavButtons();
+          // First, strictly hide everything
+          hideAllViews();
+          
+          // FIX: Close usage overlay when switching away from card view
+          if (currentView === 'card') {
+              var overlay = document.getElementById('usage-overlay');
+              if (overlay && overlay.classList.contains('visible')) {
+                  overlay.classList.remove('visible');
+                  usageOpen = false;
+                  // Re-enable buttons
+                  document.getElementById('btn-prev').disabled = false;
+                  document.getElementById('btn-pause').disabled = false;
+                  document.getElementById('btn-next').disabled = false;
+              }
+          }
+          
+          // Then show the target
+          var targetEl = document.getElementById(target === 'card' ? 'card-view' : target === 'list' ? 'list-view' : 'log-view');
+          if (targetEl) {
+              targetEl.style.display = 'block';
+              if(target === 'card') targetEl.classList.add('active');
+          }
+
+          currentView = target;
+          
+          // Specific logic per view
+          if (target === 'card') {
+             // FIX: Card view always starts paused, user must press play
+             paused = true;
+             updatePauseBtn(); // Ensure icon shows ▶
+             updateListStats(); // Show stats on return
+          } else if (target === 'list') {
+             paused = true; clearTimer(); renderWordList();
+          } else if (target === 'log') {
+             paused = true; clearTimer();
+             renderLogHistory(); // Restore view from history
+          }
+          updateNavButtons();
       };
 
       function updateNavButtons() {
@@ -481,21 +550,97 @@
         if (btnLog) btnLog.classList.toggle('active', currentView === 'log');
       }
 
+      // ================= USAGE TOGGLE HANDLER =================
+      window.toggleUsage = function() {
+        var overlay = document.getElementById('usage-overlay');
+        var btnPrev = document.getElementById('btn-prev');
+        var btnPause = document.getElementById('btn-pause');
+        var btnNext = document.getElementById('btn-next');
+        
+        if (overlay.classList.contains('visible')) {
+            // Close Usage
+            overlay.classList.remove('visible');
+            btnPrev.disabled = false;
+            btnPause.disabled = false;
+            btnNext.disabled = false;
+            usageOpen = false;
+            // Keep paused when closing usage
+        } else {
+            // Open Usage
+            var entry = queue[queueIndex];
+            var item = words.find(w => String(w.id) === String(entry?.id));
+            if (!item) return;
+    
+            var content = document.getElementById('usage-content');
+            var usageText = item.usage ? item.usage : "No usage examples saved for this word.";
+            content.innerHTML = `<div style="width:100%; text-align:center; margin-bottom:0.5rem; color:var(--primary); font-weight:bold;">Usage</div><div class="usage-example">${escHtml(usageText)}</div>`;
+            
+            overlay.classList.add('visible');
+            paused = true; 
+            clearTimer();
+            updatePauseBtn();
+            
+            btnPrev.disabled = true;
+            btnPause.disabled = true;
+            btnNext.disabled = true;
+            usageOpen = true;
+        }
+      };
+
       // ================= GLOBAL FUNCTIONS =================
-      window.updatePauseBtn = function() { var b=document.getElementById('pause-btn'); if(b) b.textContent=paused?'▶':'⏸'; };
+      window.updatePauseBtn = function() { 
+          var b = document.getElementById('pause-btn'); 
+          if(b) b.textContent = paused ? '▶' : '⏸'; 
+      };
+
+      window.updateListStats = function() {
+          var count = words.length;
+          var totalSec = 0;
+          words.forEach(w => { totalSec += (w.counter || 0) * (settings.wordTime + settings.transTime); });
+          var h = Math.floor(totalSec / 3600);
+          var m = Math.floor((totalSec % 3600) / 60);
+          var s = totalSec % 60;
+          var timeStr = (h > 0 ? h + 'h ' : '') + m + 'm ' + s + 's';
+          document.getElementById('status').textContent = `${count} words | ~${timeStr} studied`;
+      };
+
       window.closeModal = function() { var m=document.getElementById('edit-modal'); if(m) m.classList.remove('active'); editingId=null; };
-      window.clearLog = function() { logContainer=document.getElementById('log-container'); if(!logContainer)return; logContainer.innerHTML=''; logEntries=[]; console.log('🗑 Log cleared'); };
+      window.clearLog = function() { 
+         logEntries = []; // Clear memory history
+         if(logContainer) logContainer.innerHTML = ''; // Clear DOM
+         console.log('🗑 Log history cleared'); 
+      };
       window.toggleSettings = function() { var m=document.getElementById('settings-modal'); if(m){m.classList.toggle('active'); updateStorageInfo();} };
       window.setFilter = function(f) { if(f){currentFilter=f; document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===f)); renderWordList();} };
       window.switchList = function(id) { if(appData.lists[id]){appData.currentListId=id; queueSave(); loadCurrentList(); recalculateSRS(); startSession();} };
       window.createNewList = function() { var n=prompt('List name:','List '+appData.nextListId); if(!n)return; var id=String(appData.nextListId++); appData.lists[id]={id,name:n,words:[],settings:{wordTime:4,transTime:4,batchSize:100,stickyLimit:30},batch:[],nextWordId:1}; appData.currentListId=id; queueSave(); renderListSelector(); loadCurrentList(); recalculateSRS(); startSession(); window.toast('✅ Created'); };
       window.deleteCurrentList = function() { var l=appData.lists[appData.currentListId]; if(!confirm('Delete "'+l.name+'"?'))return; delete appData.lists[appData.currentListId]; var r=Object.keys(appData.lists); appData.currentListId=r.length?r[0]:null; if(!appData.currentListId) createDefaultList(); queueSave(); renderListSelector(); loadCurrentList(); recalculateSRS(); startSession(); window.toast('🗑 Deleted'); };
-      window.applySettings = function() { settings.wordTime=clamp(1,60,parseInt(document.getElementById('set-word-time').value)||4); settings.transTime=clamp(1,60,parseInt(document.getElementById('set-trans-time').value)||4); settings.batchSize=clamp(1,1000,parseInt(document.getElementById('set-batch-size').value)||100); settings.stickyLimit=clamp(0,10000,parseInt(document.getElementById('set-sticky-limit').value)||30); queueSave(); recalculateSRS(); toggleSettings(); window.toast('✅ Applied'); startSession(); };
+      window.applySettings = function() { 
+         settings.wordTime=Math.max(1, parseInt(document.getElementById('set-word-time').value) || 4); 
+         settings.transTime=Math.max(1, parseInt(document.getElementById('set-trans-time').value) || 4); 
+         settings.batchSize=Math.max(1, parseInt(document.getElementById('set-batch-size').value) || 100); 
+         settings.stickyLimit=Math.max(0, parseInt(document.getElementById('set-sticky-limit').value) || 30); 
+         queueSave(); recalculateSRS(); toggleSettings(); window.toast('✅ Applied'); startSession(); 
+      };
       window.resetBatch = function() { words.forEach(w=>{if(w.status===STATUS_NEW){w.status=STATUS_POSTPONED;w.level=0;}}); currentBatchIds=[]; queueSave(); recalculateSRS(); toggleSettings(); window.toast('🔄 Reset'); startSession(); };
       window.clearAll = function() { if(!confirm('Delete ALL?'))return; appData={lists:{},currentListId:null,nextListId:1}; saveData(); loadData(); window.toast('🗑 Cleared'); };
-      window.prevCard = function() { clearTimer(); queueIndex=Math.max(0,queueIndex-1); showCurrentCard(); };
-      window.nextCard = function() { clearTimer(); advance(); };
-      window.togglePause = function() { paused=!paused; updatePauseBtn(); if(!paused && phase!=='idle'){var r=phaseDuration-(Date.now()-phaseStart), n=phase==='word'?showTranslation:advance; r<=10?n():startPhase(r,n);} else clearTimer(); };
+      
+      window.prevCard = function() { 
+          if(usageOpen) return;
+          clearTimer(); queueIndex=Math.max(0,queueIndex-1); showCurrentCard(); 
+      };
+      window.nextCard = function() { 
+          if(usageOpen) return;
+          clearTimer(); advance(); 
+      };
+      window.togglePause = function() { 
+          if(usageOpen) return;
+          paused=!paused; updatePauseBtn(); 
+          if(!paused && phase!=='idle'){
+            var r=phaseDuration-(Date.now()-phaseStart), n=phase==='word'?showTranslation:advance; 
+            r<=10?n():startPhase(r,n);
+          } else clearTimer(); 
+      };
 
       window.addWord = function() { 
         var w=document.getElementById('input-word').value.trim(), p=document.getElementById('input-pron').value.trim(), t=document.getElementById('input-trans').value.trim(), u=document.getElementById('input-usage').value.trim();
@@ -539,8 +684,12 @@
                var list=appData.lists[appData.currentListId];
                d.forEach(it=>{
                   var wr=it.word, wa=Array.isArray(wr)?wr.map(x=>(x==null)?'':String(x).trim()):[String(wr).trim()];
-                  var w=wa[0]; if(!w)return; var t=(wa[1]||'').trim(), p='', u='';
-                  for(var i=2;i<wa.length;i++){if(typeof wa[i]==='object'&&wa[i]!==null&&wa[i].usage)u=wa[i].usage;else if(typeof wa[i]==='string'&&wa[i].length>0&&!p)p=wa[i];}
+                  var w=wa[0]; if(!w)return; 
+                  var t = (wa.length > 1) ? wa[1].trim() : (it.translation ? String(it.translation).trim() : '');
+                  var p = (wa.length > 2) ? wa[2].trim() : (it.pronunciation ? String(it.pronunciation).trim() : '');
+                  var u = '';
+                  for(var i=2;i<wa.length;i++){if(typeof wa[i]==='object'&&wa[i]!==null&&wa[i].usage){u=wa[i].usage;break;}}
+                  if(!u && it.usage) u = String(it.usage);
                   if(words.some(x=>x.word.toLowerCase()===w.toLowerCase()))return;
                   words.push({id:String(list.nextWordId++),word:w,pronunciation:p,translation:t,usage:u,status:(it.status===STATUS_REVISION)?STATUS_REVISION:STATUS_POSTPONED,counter:it.counter||0,level:it.level||0,lastRevision:it.lastRevision||Date.now(),revisionViewsCount:0,flipSide:false});
                   total++;
@@ -596,20 +745,76 @@
 
       function startSession() { 
         if(sessionRecursionGuard)return; sessionRecursionGuard=true;
-        try { switchView('card'); recalculateSRS(); paused=false;phase='idle';clearTimer();queueIndex=0;updatePauseBtn();
+        try { 
+           // Ensure we are on the card view when starting a session
+           switchView('card'); 
+           recalculateSRS(); 
+           // Start session paused
+           paused = true;
+           phase='idle';
+           clearTimer();
+           queueIndex=0;
+           updatePauseBtn();
+           updateListStats();
+           updateBadge();
+           
           if(mode==='learning'){if(!words.length){showEmptyCard('No words.');return;}syncBatchStatuses();if(!currentBatchIds.length){showEmptyCard(words.some(w=>w.status===STATUS_POSTPONED)?'Batch empty. Reset to refill.':'Add words.');return;}queue=shuffleArray(currentBatchIds.map(id=>({id,flip:false,skip:false})));}
           else{var d=words.filter(w=>w.status===STATUS_REVISION&&w.revisionViewsCount<2);if(!d.length){showEmptyCard('✅ Caught up!');return;}queue=shuffleArray(d.map(w=>({id:w.id,flip:w.flipSide,skip:false})));}
-          updateBadge(); showCurrentCard(); 
+          showCurrentCard(); 
         } finally{sessionRecursionGuard=false;}
       }
       function showCurrentCard(){while(queueIndex<queue.length){var e=queue[queueIndex];if(e.skip){queueIndex++;continue;}var it=words.find(w=>String(w.id)===String(e.id));if(!it){e.skip=true;queueIndex++;continue;}displayWord(it,e.flip);return;}if(queueIndex>=queue.length)startSession();}
-      function displayWord(it,fl){phase='word';it.revisionViewsCount++;it.flipSide=!fl;queueSave();document.getElementById('c-pron').textContent=it.pronunciation||'';document.getElementById('c-word').textContent=fl?it.translation:it.word;document.getElementById('c-trans').textContent=fl?it.word:it.translation;document.getElementById('c-trans').classList.remove('visible');document.getElementById('c-counter').textContent='Seen: '+((it.counter||0)+'×');document.getElementById('c-revision').textContent='Last: '+((it.lastRevision?new Date(it.lastRevision).toLocaleString():'Never'));document.getElementById('c-level').textContent='Lvl: '+(it.level||0);if(mode==='repeating'&&it.revisionViewsCount>=2){it.status=STATUS_LEARNED;it.level=Math.min((it.level||0)+1,24);it.lastRevision=Date.now();queueSave();recalculateSRS();queue.forEach(q=>String(q.id)===String(it.id)&&(q.skip=true));}it.counter=(it.counter||0)+1;updateBadge();startPhase(settings.wordTime*1000,showTranslation);}
-      function showTranslation(){phase='trans';var pr=document.getElementById('c-pron');if(pr){var it=words.find(w=>String(w.id)===String(queue[queueIndex]?.id));pr.textContent=it?(it.pronunciation||''):'';}document.getElementById('c-trans').classList.add('visible');startPhase(settings.transTime*1000,advance);}
+      
+      function displayWord(it,fl){
+          phase='word';
+          it.revisionViewsCount++;
+          it.flipSide=!fl;
+          queueSave();
+          
+          document.getElementById('c-word').textContent = fl ? it.translation : it.word;
+          document.getElementById('c-trans').textContent = fl ? it.word : it.translation;
+          document.getElementById('c-pron').textContent = '';
+          document.getElementById('c-trans').classList.remove('visible');
+          // FIX 2: Removed × from counter
+          document.getElementById('c-counter').textContent='Seen: '+(it.counter||0);
+          document.getElementById('c-revision').textContent='Last: '+((it.lastRevision?new Date(it.lastRevision).toLocaleString():'Never'));
+          document.getElementById('c-level').textContent='Lvl: '+(it.level||0);
+          
+          if(mode==='repeating'&&it.revisionViewsCount>=2){
+              it.status=STATUS_LEARNED;
+              it.level=Math.min((it.level||0)+1,24);
+              it.lastRevision=Date.now();
+              queueSave();
+              recalculateSRS();
+              queue.forEach(q=>String(q.id)===String(it.id)&&(q.skip=true));
+          }
+          it.counter=(it.counter||0)+1;
+          updateBadge();
+          startPhase(Math.max(1, parseInt(settings.wordTime))*1000, showTranslation);
+      }
+
+      function showTranslation(){
+          phase='trans';
+          var elPron = document.getElementById('c-pron');
+          elPron.textContent = words.find(w=>String(w.id)===String(queue[queueIndex]?.id))?.pronunciation || '';
+          document.getElementById('c-trans').classList.add('visible');
+          startPhase(Math.max(1, parseInt(settings.transTime))*1000, advance);
+      }
       function advance(){queueIndex++;if(queueIndex>=queue.length)startSession();else showCurrentCard();}
       function startPhase(ms,cb){phaseStart=Date.now();phaseDuration=ms;timerId=setTimeout(()=>{if(!paused)cb()},ms);}
       function clearTimer(){clearTimeout(timerId);timerId=null;}
-      function updateBadge(){var b=document.getElementById('q-badge');if(!b)return;b.textContent=mode==='learning'?queue.filter(e=>!e.skip).length+' / '+currentBatchIds.length:new Set(queue.filter(e=>!e.skip).map(e=>e.id)).size+' words';}
-      function showEmptyCard(m){var w=document.getElementById('c-word');if(!w)return;w.textContent='📭';document.getElementById('c-pron').textContent='';var t=document.getElementById('c-trans');if(t){t.textContent=m;t.classList.remove('visible');}document.getElementById('c-counter').textContent='';document.getElementById('c-revision').textContent='Last: Never';document.getElementById('c-level').textContent='Lvl: 0';document.getElementById('q-badge').textContent='0';document.getElementById('status').textContent='';}
+      
+      // FIX 3: Updated badge to show position / new-count / revision-count (pink)
+      function updateBadge(){
+          var b = document.getElementById('q-badge');
+          if(!b) return;
+          var pos = (queueIndex < queue.length) ? (queueIndex + 1) : queue.length;
+          var newCount = words.filter(w => w.status === STATUS_NEW).length;
+          var revCount = words.filter(w => w.status === STATUS_REVISION).length;
+          b.innerHTML = `${pos} / ${newCount} / <span style="color:var(--pink)">${revCount}</span>`;
+      }
+
+      function showEmptyCard(m){var w=document.getElementById('c-word');if(!w)return;w.textContent='📭';document.getElementById('c-pron').textContent='';var t=document.getElementById('c-trans');if(t){t.textContent=m;t.classList.remove('visible');}document.getElementById('c-counter').textContent='';document.getElementById('c-revision').textContent='Last: Never';document.getElementById('c-level').textContent='Lvl: 0';document.getElementById('q-badge').innerHTML='0 / 0 / <span style="color:var(--pink)">0</span>';document.getElementById('status').textContent='';}
       var clamp=(a,b,v)=>Math.min(b,Math.max(a,v||a)), escHtml=s=>{var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}, shuffleArray=arr=>{var a=[...arr];for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a};
       window.toast = m=>{var s=document.getElementById('status');if(s){s.textContent=m;setTimeout(()=>{if(s.textContent===m)s.textContent=''},2000);}};
 
@@ -619,8 +824,29 @@
         document.getElementById('btn-learn').addEventListener('click',()=>{mode='learning';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));startSession();});
         document.getElementById('btn-repeat').addEventListener('click',()=>{mode='repeating';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));startSession();});
         document.getElementById('btn-settings').addEventListener('click',toggleSettings);
+        
         var card=document.getElementById('main-card');
-        if(card)card.addEventListener('click',e=>{if(!queue.length)return;var s=window.getSelection();if(s?.type==='Range'&&s.toString().trim().length>0)return;var en=queue[queueIndex];if(!en||en.skip)return;var it=words.find(w=>String(w.id)===String(en.id));if(!it)return;if(mode==='learning'){it.status=STATUS_REVISION;it.level=1;it.lastRevision=Date.now();it.revisionViewsCount=0;it.flipSide=false;currentBatchIds=currentBatchIds.filter(id=>String(id)!==String(it.id));queueSave();recalculateSRS();window.toast('✅ Revision');}else{it.status=STATUS_NEW;it.level=0;it.lastRevision=Date.now();it.revisionViewsCount=0;it.flipSide=false;queueSave();recalculateSRS();window.toast('🔄 Learn');}clearTimer();advance();});
+        if(card)card.addEventListener('click',e=>{
+          if(usageOpen) return; // Ignore clicks on card when usage is open
+          if(e.target.closest('#usage-overlay')) return;
+          if(!queue.length)return;
+          var s=window.getSelection();
+          if(s?.type==='Range'&&s.toString().trim().length>0)return;
+          var en=queue[queueIndex];
+          if(!en||en.skip)return;
+          var it=words.find(w=>String(w.id)===String(en.id));
+          if(!it)return;
+          if(mode==='learning'){
+            it.status=STATUS_REVISION;it.level=1;it.lastRevision=Date.now();it.revisionViewsCount=0;it.flipSide=false;
+            currentBatchIds=currentBatchIds.filter(id=>String(id)!==String(it.id));
+            queueSave();recalculateSRS();window.toast('✅ Revision');
+          }else{
+            it.status=STATUS_NEW;it.level=0;it.lastRevision=Date.now();it.revisionViewsCount=0;it.flipSide=false;
+            queueSave();recalculateSRS();window.toast('🔄 Learn');
+          }
+          clearTimer();advance();
+        });
+        
         document.getElementById('edit-modal').addEventListener('click',e=>{if(e.target.id==='edit-modal')closeModal();});
         document.getElementById('settings-modal').addEventListener('click',e=>{if(e.target.id==='settings-modal')toggleSettings();});
         srsTimerId=setInterval(recalculateSRS,60000);
