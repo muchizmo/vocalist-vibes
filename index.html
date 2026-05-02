@@ -79,6 +79,15 @@
     .filter-btn { padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--card); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; }
     .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
     
+    /* Search Input Style */
+    .search-container { margin-bottom: 0.5rem; }
+    .search-input { 
+        width: 100%; padding: 0.6rem 0.8rem; 
+        background: var(--bg); border: 1px solid var(--border); border-radius: 6px; 
+        color: var(--text); font-size: 0.9rem; outline: none; 
+    }
+    .search-input:focus { border-color: var(--primary); }
+
     .list-view-header { display: flex; justify-content: center; margin-bottom: 0.6rem; }
     .list-view-header h3 { 
         cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0.5rem 1rem; 
@@ -172,7 +181,7 @@
 
   <header>
     <h1>📖 Word Learning</h1>
-    <div class="version">v2.1.1</div>
+    <div class="version">v2.1.5</div>
     <div class="list-selector">
       <select id="list-select" onchange="window.switchList(this.value)"></select>
       <button class="btn secondary" onclick="window.createNewList()">+ New</button>
@@ -202,7 +211,6 @@
               <span id="c-counter">Seen: 0</span>
               <span id="c-revision">Last: Never</span>
             </div>
-            <!-- Removed: Tap to move · Select text freely -->
             
             <div id="usage-overlay">
               <div id="usage-content"></div>
@@ -224,6 +232,12 @@
       <div class="list-view-header">
         <h3 onclick="window.switchView('card')">📚 Library (Tap to return to Cards)</h3>
       </div>
+      
+      <!-- NEW: Search Input -->
+      <div class="search-container">
+          <input type="text" id="search-input" class="search-input" placeholder="🔍 Search word or translation...">
+      </div>
+
       <div class="filter-row">
         <button class="filter-btn active" data-filter="all" onclick="window.setFilter('all')">All</button>
         <button class="filter-btn" data-filter="new" onclick="window.setFilter('new')">📖 New</button>
@@ -369,7 +383,7 @@
       var words = [], settings = { wordTime: 4, transTime: 4, batchSize: 100, stickyLimit: 30 }, mode = 'learning', currentFilter = 'all';
       var currentBatchIds = [], queue = [], queueIndex = 0;
       var paused = true, phase = 'idle', phaseStart = 0, phaseDuration = 0, timerId = null, editingId = null;
-      var usageOpen = false; 
+      var usageOpen = false, searchQuery = ""; 
       var sessionRecursionGuard = false;
       var logEntries = []; // PERSISTENT LOG HISTORY
       var srsTimerId = null;
@@ -442,7 +456,7 @@
       
       function renderLogHistory() {
         if (!logContainer) return;
-        logContainer.innerHTML = ''; // Clear DOM only, keep history array
+        logContainer.innerHTML = ''; 
         logEntries.forEach(entry => appendLogEntryToDOM(entry));
       }
 
@@ -503,10 +517,12 @@
       }
 
       window.switchView = function(target) {
-          // First, strictly hide everything
+          // Do nothing if already on target view
+          if (currentView === target) return;
+          
           hideAllViews();
           
-          // FIX: Close usage overlay when switching away from card view
+          // Close usage overlay when switching away from card view
           if (currentView === 'card') {
               var overlay = document.getElementById('usage-overlay');
               if (overlay && overlay.classList.contains('visible')) {
@@ -519,7 +535,7 @@
               }
           }
           
-          // Then show the target
+          // Show the target
           var targetEl = document.getElementById(target === 'card' ? 'card-view' : target === 'list' ? 'list-view' : 'log-view');
           if (targetEl) {
               targetEl.style.display = 'block';
@@ -532,13 +548,13 @@
           if (target === 'card') {
              // FIX: Card view always starts paused, user must press play
              paused = true;
-             updatePauseBtn(); // Ensure icon shows ▶
-             updateListStats(); // Show stats on return
+             updatePauseBtn(); 
+             updateListStats(); 
           } else if (target === 'list') {
              paused = true; clearTimer(); renderWordList();
           } else if (target === 'log') {
              paused = true; clearTimer();
-             renderLogHistory(); // Restore view from history
+             renderLogHistory(); 
           }
           updateNavButtons();
       };
@@ -658,46 +674,76 @@
         if(added){queueSave();recalculateSRS();if(currentView==='list')renderWordList();window.toast('✅ Imported '+added);} else window.toast('⚠️ None');
       };
 
+      // ================= UPDATED IMPORT LOGIC (v2.1.4) =================
       window.importJSON = function(inp) { 
         var f=inp.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(e){ 
           try { 
             var d=JSON.parse(e.target.result); if(!Array.isArray(d))throw new Error('Invalid');
             var total=0, isMulti=d.length>0&&d[0]._id&&d[0].listName;
+            
+            // Helper to apply import data
+            var applyImport = function(list, it) {
+               var impId = it.id != null ? String(it.id) : null;
+               var wr=it.word, wa=Array.isArray(wr)?wr.map(x=>(x==null)?'':String(x).trim()):[String(wr).trim()];
+               var w=wa[0]; if(!w) return false; 
+               var t = (wa.length > 1) ? wa[1].trim() : (it.translation ? String(it.translation).trim() : '');
+               var p = (wa.length > 2) ? wa[2].trim() : (it.pronunciation ? String(it.pronunciation).trim() : '');
+               var u = '';
+               for(var i=2;i<wa.length;i++){if(typeof wa[i]==='object'&&wa[i]!==null&&wa[i].usage){u=wa[i].usage;break;}}
+               if(!u && it.usage) u = String(it.usage);
+               
+               if (impId) {
+                   var idx = list.words.findIndex(x => String(x.id) === impId);
+                   if (idx !== -1) {
+                       // Update existing entry
+                       list.words[idx].word = w;
+                       list.words[idx].pronunciation = p;
+                       list.words[idx].translation = t;
+                       list.words[idx].usage = u;
+                       if(it.status) list.words[idx].status = (it.status===STATUS_REVISION) ? STATUS_REVISION : STATUS_POSTPONED;
+                       if(it.counter != null) list.words[idx].counter = it.counter;
+                       if(it.level != null) list.words[idx].level = it.level;
+                       if(it.lastRevision != null) list.words[idx].lastRevision = it.lastRevision;
+                       if(it.revisionViewsCount != null) list.words[idx].revisionViewsCount = it.revisionViewsCount;
+                       return true;
+                   }
+               }
+               // Add new entry
+               var newId = impId || String(list.nextWordId++);
+               list.words.push({
+                   id: newId, word: w, pronunciation: p, translation: t, usage: u,
+                   status: (it.status===STATUS_REVISION) ? STATUS_REVISION : STATUS_POSTPONED,
+                   counter: it.counter||0, level: it.level||0,
+                   lastRevision: it.lastRevision||Date.now(),
+                   revisionViewsCount: it.revisionViewsCount||0, flipSide: false
+               });
+               return true;
+            };
+
             if(isMulti){
                d.forEach(lo=>{
                   var ln=lo.listName||'Imported', lid=lo._id||'imp_'+Date.now();
-                  var tl=null; Object.keys(appData.lists).forEach(k=>{if(appData.lists[k].name===ln||appData.lists[k].id===lid)tl=appData.lists[k];});
-                  if(!tl){tl={id:lid,name:ln,words:[],settings:{wordTime:4,transTime:4,batchSize:100,stickyLimit:30},batch:[],nextWordId:1};appData.lists[lid]=tl;appData.currentListId=lid;}
+                  var tl=null; 
+                  Object.keys(appData.lists).forEach(k=>{if(appData.lists[k].name===ln||appData.lists[k].id===lid)tl=appData.lists[k];});
+                  if(!tl){
+                      tl={id:lid,name:ln,words:[],settings:{wordTime:4,transTime:4,batchSize:100,stickyLimit:30},batch:[],nextWordId:1};
+                      appData.lists[lid]=tl; 
+                  }
                   Object.keys(lo).forEach(key=>{
                      if(key.indexOf('_wordEntry')!==-1){
-                        var ent=lo[key]; if(!ent||!ent.word)return;
-                        var wa=Array.isArray(ent.word)?ent.word.map(x=>(x==null)?'':String(x).trim()):[(ent.word==null)?'':String(ent.word).trim()];
-                        var wd=wa[0]; if(!wd)return; var tr=wa[1]||'', pr='', us='';
-                        for(var i=2;i<wa.length;i++){if(typeof wa[i]==='object'&&wa[i]!==null&&wa[i].usage)us=wa[i].usage;else if(typeof wa[i]==='string'&&wa[i].length>0&&!pr)pr=wa[i];}
-                        if(tl.words.some(w=>w.word.toLowerCase()===wd.toLowerCase()))return;
-                        tl.words.push({id:ent.entryKey||String(tl.nextWordId++),word:wd,pronunciation:pr,translation:tr,usage:us,status:(String(ent.direction).trim()==='1')?STATUS_REVISION:STATUS_POSTPONED,counter:parseInt(ent.counter)||0,level:parseInt(ent.level)||0,lastRevision:ent.lastRevision?Date.parse(ent.lastRevision):Date.now(),revisionViewsCount:0,flipSide:false});
-                        total++;
+                        if(applyImport(tl, lo[key])) total++;
                      }
                   });
                });
             } else {
                var list=appData.lists[appData.currentListId];
                d.forEach(it=>{
-                  var wr=it.word, wa=Array.isArray(wr)?wr.map(x=>(x==null)?'':String(x).trim()):[String(wr).trim()];
-                  var w=wa[0]; if(!w)return; 
-                  var t = (wa.length > 1) ? wa[1].trim() : (it.translation ? String(it.translation).trim() : '');
-                  var p = (wa.length > 2) ? wa[2].trim() : (it.pronunciation ? String(it.pronunciation).trim() : '');
-                  var u = '';
-                  for(var i=2;i<wa.length;i++){if(typeof wa[i]==='object'&&wa[i]!==null&&wa[i].usage){u=wa[i].usage;break;}}
-                  if(!u && it.usage) u = String(it.usage);
-                  if(words.some(x=>x.word.toLowerCase()===w.toLowerCase()))return;
-                  words.push({id:String(list.nextWordId++),word:w,pronunciation:p,translation:t,usage:u,status:(it.status===STATUS_REVISION)?STATUS_REVISION:STATUS_POSTPONED,counter:it.counter||0,level:it.level||0,lastRevision:it.lastRevision||Date.now(),revisionViewsCount:0,flipSide:false});
-                  total++;
+                  if(applyImport(list, it)) total++;
                });
                if(currentView==='list')renderWordList();
             }
             queueSave(); recalculateSRS(); startSession();
-            window.toast(total>0?'✅ Imported '+total+' words':'⚠️ No new words');
+            window.toast(total>0?'✅ Imported/Updated '+total+' words':'⚠️ No words');
           } catch(x){window.toast('❌ Invalid JSON');console.error(x);} 
         }; r.readAsText(f); inp.value=''; 
       };
@@ -716,7 +762,15 @@
       window.renderWordList = function() { 
         if(!words||!words.length){document.getElementById('empty-list').style.display='block';return;}
         recalculateSRS(); var c=document.getElementById('word-list'); c.innerHTML=''; 
-        var f=currentFilter==='all'?words:words.filter(w=>w.status===currentFilter); 
+        
+        var f = currentFilter === 'all' ? words : words.filter(w => w.status === currentFilter);
+
+        // FIX: Search Filter Logic
+        if(searchQuery) {
+            var q = searchQuery.toLowerCase();
+            f = f.filter(w => w.word.toLowerCase().includes(q) || w.translation.toLowerCase().includes(q));
+        }
+
         if(!f.length){document.getElementById('empty-list').style.display='block';return;} document.getElementById('empty-list').style.display='none'; 
         f.forEach(w=>{var el=document.createElement('div'); el.className='word-item'; var ph=w.pronunciation?'<div class="p">'+escHtml(w.pronunciation)+'</div>':''; var mt='👁 '+((w.counter||0)+' | Lvl '+(w.level||0)); var nr=getTimeRemaining(w); if(nr)mt+=' | '+nr; el.innerHTML='<div class="info"><div class="w">'+escHtml(w.word)+'</div>'+ph+'<div class="t">'+escHtml(w.translation||'[no trans]')+'</div><div class="meta">'+mt+'</div></div><span class="status-tag '+w.status+'">'+w.status+'</span><div class="actions"><button class="btn secondary" onclick="window.openEdit(\''+w.id+'\')">✏️</button><button class="btn danger" onclick="window.deleteWord(\''+w.id+'\')">🗑</button></div>'; c.appendChild(el);}); 
       };
@@ -735,22 +789,43 @@
       function loadCurrentList() { var l=appData.lists[appData.currentListId]; if(!l)return; words=l.words||[]; settings=l.settings||{wordTime:4,transTime:4,batchSize:100,stickyLimit:30}; currentBatchIds=(l.batch||[]).map(String); document.getElementById('set-word-time').value=settings.wordTime; document.getElementById('set-trans-time').value=settings.transTime; document.getElementById('set-batch-size').value=settings.batchSize; document.getElementById('set-sticky-limit').value=settings.stickyLimit; words.forEach(w=>{w.id=String(w.id);if(![STATUS_NEW,STATUS_POSTPONED,STATUS_LEARNED,STATUS_REVISION].includes(w.status))w.status=STATUS_POSTPONED; w.level=parseInt(w.level)||0;w.lastRevision=w.lastRevision||Date.now();w.revisionViewsCount=parseInt(w.revisionViewsCount)||0;w.flipSide=!!w.flipSide;w.usage=w.usage||'';}); }
       function renderListSelector() { var s=document.getElementById('list-select'); s.innerHTML=''; Object.keys(appData.lists).forEach(id=>{var l=appData.lists[id];var o=document.createElement('option');o.value=l.id;o.textContent=l.name;if(String(l.id)===String(appData.currentListId))o.selected=true;s.appendChild(o);}); }
 
+      // ================= FIX: CORRECT BATCH LOGIC =================
       function syncBatchStatuses() { 
-        var sl=settings.stickyLimit||30, nw=words.filter(w=>w.status===STATUS_NEW), pw=words.filter(w=>w.status===STATUS_POSTPONED), sN=[], nN=[];
-        nw.forEach(w=>((w.counter||0)<sl?sN:nN).push(w)); var sr=(a,b)=>(a.lastRevision||0)-(b.lastRevision||0); sN.sort(sr); nN.sort(sr); var so=sN.concat(nN), ids=[], c=0;
-        for(var i=0;i<so.length;i++){if(c>=settings.batchSize)break;ids.push(String(so[i].id));c++;}
-        if(c<settings.batchSize){pw.sort(sr);for(var j=0;j<pw.length;j++){if(c>=settings.batchSize)break;pw[j].status=STATUS_NEW;ids.push(String(pw[j].id));c++;}}
-        var set=new Set(ids); words.forEach(w=>{if(w.status===STATUS_NEW&&!set.has(String(w.id)))w.status=STATUS_POSTPONED;}); currentBatchIds=ids;
+        var sl=settings.stickyLimit||30; 
+        var nw=words.filter(w=>w.status===STATUS_NEW), pw=words.filter(w=>w.status===STATUS_POSTPONED);
+        var sN=[], nN=[];
+        nw.forEach(w=>((w.counter||0)<sl?sN:nN).push(w)); 
+        var sr=(a,b)=>(a.lastRevision||0)-(b.lastRevision||0); 
+        sN.sort(sr); nN.sort(sr); 
+        var sortedNew=sN.concat(nN), ids=[], c=0;
+        
+        for(var i=0;i<sortedNew.length;i++){
+            if(c>=settings.batchSize) break;
+            ids.push(String(sortedNew[i].id));
+            c++;
+        }
+        
+        if(c<settings.batchSize){
+            pw.sort(sr);
+            for(var j=0;j<pw.length;j++){
+                if(c>=settings.batchSize) break;
+                pw[j].status=STATUS_NEW; 
+                ids.push(String(pw[j].id));
+                c++;
+            }
+        }
+        
+        currentBatchIds=ids;
       }
 
-      function startSession() { 
-        if(sessionRecursionGuard)return; sessionRecursionGuard=true;
+      // ================= FIX: LOOPING LOGIC =================
+      function startSession(isLoop) { 
+        if(sessionRecursionGuard) return; 
+        sessionRecursionGuard=true;
         try { 
-           // Ensure we are on the card view when starting a session
            switchView('card'); 
            recalculateSRS(); 
-           // Start session paused
-           paused = true;
+           if (!isLoop) paused = true;
            phase='idle';
            clearTimer();
            queueIndex=0;
@@ -763,7 +838,17 @@
           showCurrentCard(); 
         } finally{sessionRecursionGuard=false;}
       }
-      function showCurrentCard(){while(queueIndex<queue.length){var e=queue[queueIndex];if(e.skip){queueIndex++;continue;}var it=words.find(w=>String(w.id)===String(e.id));if(!it){e.skip=true;queueIndex++;continue;}displayWord(it,e.flip);return;}if(queueIndex>=queue.length)startSession();}
+      function showCurrentCard(){
+          while(queueIndex<queue.length){
+              var e=queue[queueIndex];
+              if(e.skip){queueIndex++;continue;}
+              var it=words.find(w=>String(w.id)===String(e.id));
+              if(!it){e.skip=true;queueIndex++;continue;}
+              displayWord(it,e.flip);
+              return;
+          }
+          if(queueIndex>=queue.length) startSession(true);
+      }
       
       function displayWord(it,fl){
           phase='word';
@@ -775,7 +860,6 @@
           document.getElementById('c-trans').textContent = fl ? it.word : it.translation;
           document.getElementById('c-pron').textContent = '';
           document.getElementById('c-trans').classList.remove('visible');
-          // FIX 2: Removed × from counter
           document.getElementById('c-counter').textContent='Seen: '+(it.counter||0);
           document.getElementById('c-revision').textContent='Last: '+((it.lastRevision?new Date(it.lastRevision).toLocaleString():'Never'));
           document.getElementById('c-level').textContent='Lvl: '+(it.level||0);
@@ -800,21 +884,24 @@
           document.getElementById('c-trans').classList.add('visible');
           startPhase(Math.max(1, parseInt(settings.transTime))*1000, advance);
       }
-      function advance(){queueIndex++;if(queueIndex>=queue.length)startSession();else showCurrentCard();}
+      function advance(){queueIndex++;if(queueIndex>=queue.length)startSession(true);else showCurrentCard();}
       function startPhase(ms,cb){phaseStart=Date.now();phaseDuration=ms;timerId=setTimeout(()=>{if(!paused)cb()},ms);}
       function clearTimer(){clearTimeout(timerId);timerId=null;}
       
-      // FIX 3: Updated badge to show position / new-count / revision-count (pink)
       function updateBadge(){
           var b = document.getElementById('q-badge');
           if(!b) return;
-          var pos = (queueIndex < queue.length) ? (queueIndex + 1) : queue.length;
-          var newCount = words.filter(w => w.status === STATUS_NEW).length;
           var revCount = words.filter(w => w.status === STATUS_REVISION).length;
-          b.innerHTML = `${pos} / ${newCount} / <span style="color:var(--pink)">${revCount}</span>`;
+          if (mode === 'repeating') {
+              b.textContent = revCount;
+          } else {
+              var pos = (queueIndex < queue.length) ? (queueIndex + 1) : queue.length;
+              var newCount = words.filter(w => w.status === STATUS_NEW).length;
+              b.innerHTML = `${pos} / ${newCount} / <span style="color:var(--pink)">${revCount}</span>`;
+          }
       }
 
-      function showEmptyCard(m){var w=document.getElementById('c-word');if(!w)return;w.textContent='📭';document.getElementById('c-pron').textContent='';var t=document.getElementById('c-trans');if(t){t.textContent=m;t.classList.remove('visible');}document.getElementById('c-counter').textContent='';document.getElementById('c-revision').textContent='Last: Never';document.getElementById('c-level').textContent='Lvl: 0';document.getElementById('q-badge').innerHTML='0 / 0 / <span style="color:var(--pink)">0</span>';document.getElementById('status').textContent='';}
+      function showEmptyCard(m){var w=document.getElementById('c-word');if(!w)return;w.textContent='📭';document.getElementById('c-pron').textContent='';var t=document.getElementById('c-trans');if(t){t.textContent=m;t.classList.remove('visible');}document.getElementById('c-counter').textContent='';document.getElementById('c-revision').textContent='Last: Never';document.getElementById('c-level').textContent='Lvl: 0';updateBadge(); document.getElementById('status').textContent='';}
       var clamp=(a,b,v)=>Math.min(b,Math.max(a,v||a)), escHtml=s=>{var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}, shuffleArray=arr=>{var a=[...arr];for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a};
       window.toast = m=>{var s=document.getElementById('status');if(s){s.textContent=m;setTimeout(()=>{if(s.textContent===m)s.textContent=''},2000);}};
 
@@ -825,9 +912,15 @@
         document.getElementById('btn-repeat').addEventListener('click',()=>{mode='repeating';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));startSession();});
         document.getElementById('btn-settings').addEventListener('click',toggleSettings);
         
+        // NEW: Search Input Listener
+        document.getElementById('search-input').addEventListener('input', function(e) {
+            searchQuery = e.target.value;
+            renderWordList();
+        });
+
         var card=document.getElementById('main-card');
         if(card)card.addEventListener('click',e=>{
-          if(usageOpen) return; // Ignore clicks on card when usage is open
+          if(usageOpen) return; 
           if(e.target.closest('#usage-overlay')) return;
           if(!queue.length)return;
           var s=window.getSelection();
